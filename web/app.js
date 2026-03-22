@@ -656,10 +656,19 @@ async function startZipDownload(infoHash) {
   const downloadUrl = `${API_BASE}/torrents/${infoHash}/download-zip`;
   const maxAttempts = 180;
 
-  showMessage("Preparing ZIP for resumable download...", false);
+  renderZipPrepareProgress({ progress: 0, etaSeconds: 0, processedBytes: 0, totalBytes: 0 });
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const result = await apiRequest("GET", prepareUrl, null, { returnMeta: true });
+    if (result.payload && result.payload.status === "error") {
+      showMessage(result.payload.error || "ZIP preparation failed.", true);
+      return;
+    }
+
+    if (result.payload && (result.payload.status === "building" || result.status === 202)) {
+      renderZipPrepareProgress(result.payload);
+    }
+
     if (result.status === 200 && result.payload && result.payload.status === "ready") {
       const a = document.createElement("a");
       a.href = (result.payload.downloadUrl || downloadUrl);
@@ -697,6 +706,29 @@ function showMessage(message, isError) {
       clearMessage();
     }, 5000);
   }
+}
+
+function renderZipPrepareProgress(payload) {
+  const progress = clampNumber(payload?.progress || 0, 0, 100);
+  const processedBytes = Number.isFinite(payload?.processedBytes) ? payload.processedBytes : 0;
+  const totalBytes = Number.isFinite(payload?.totalBytes) ? payload.totalBytes : 0;
+  const etaLabel = formatEta(payload?.etaSeconds || 0);
+
+  const detail = totalBytes > 0
+    ? `${formatBytes(processedBytes)} / ${formatBytes(totalBytes)}`
+    : `${formatBytes(processedBytes)} processed`;
+
+  elements.notificationBar.innerHTML = `
+    <div class="zip-progress-wrap">
+      <div class="zip-progress-title">Preparing ZIP for resumable download...</div>
+      <div class="zip-progress-bar"><span style="width:${progress.toFixed(1)}%"></span></div>
+      <div class="zip-progress-meta">
+        <span>${progress.toFixed(1)}% (${detail})</span>
+        <span>ETA ${etaLabel}</span>
+      </div>
+    </div>
+  `;
+  elements.notificationBar.className = "notification-bar notification-success notification-show";
 }
 
 function formatBytes(bytes) {

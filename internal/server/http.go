@@ -38,6 +38,7 @@ func NewHTTPServer(cfg Config) (http.Handler, error) {
         manager:     cfg.Manager,
         downloadDir: cfg.DownloadDir,
         zipBuilds:   make(map[string]struct{}),
+        zipStatus:   make(map[string]*zipBuildStatus),
     }
 
     if trimmed := strings.TrimSpace(cfg.StaticDir); trimmed != "" {
@@ -75,6 +76,17 @@ type httpServer struct {
 
     zipBuildMu sync.Mutex
     zipBuilds  map[string]struct{}
+    zipStatus  map[string]*zipBuildStatus
+}
+
+type zipBuildStatus struct {
+    TotalBytes     int64
+    ProcessedBytes int64
+    StartedAt      time.Time
+    UpdatedAt      time.Time
+    Ready          bool
+    Error          string
+    DownloadURL    string
 }
 
 func (s *httpServer) mountAPI(r chi.Router) {
@@ -514,13 +526,15 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
         }
         
         // Verify file exists
-        if _, err := os.Stat(filePath); err != nil {
+        stat, err := os.Stat(filePath)
+        if err != nil {
             continue
         }
         
         completedFiles = append(completedFiles, zipFileEntry{
             path:     fileInfo.Path,
             filePath: filePath,
+            size:     stat.Size(),
         })
     }
     
@@ -549,6 +563,8 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
             respondJSON(w, http.StatusOK, map[string]interface{}{
                 "status":      "ready",
                 "downloadUrl": downloadURL,
+                "progress":    100.0,
+                "etaSeconds":  int64(0),
             })
             return
         }
@@ -556,13 +572,16 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    s.ensureZipBuild(zipPath, completedFiles)
+    totalBytes := int64(0)
+    for _, entry := range completedFiles {
+        totalBytes += entry.size
+    }
+
+    s.ensureZipBuild(zipPath, completedFiles, totalBytes, downloadURL)
 
     if prepareOnly {
-        respondJSON(w, http.StatusAccepted, map[string]interface{}{
-            "status":      "building",
-            "downloadUrl": downloadURL,
-        })
+        status := s.getZipBuildStatus(zipPath)
+        respondJSON(w, http.StatusAccepted, s.zipStatusResponse("building", status, downloadURL))
         return
     }
 
@@ -572,25 +591,121 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
 type zipFileEntry struct {
     path     string
     filePath string
+    size     int64
 }
 
-func (s *httpServer) ensureZipBuild(zipPath string, completedFiles []zipFileEntry) {
+func (s *httpServer) ensureZipBuild(zipPath string, completedFiles []zipFileEntry, totalBytes int64, downloadURL string) {
     s.zipBuildMu.Lock()
     if _, building := s.zipBuilds[zipPath]; building {
         s.zipBuildMu.Unlock()
         return
     }
     s.zipBuilds[zipPath] = struct{}{}
+    s.zipStatus[zipPath] = &zipBuildStatus{
+        TotalBytes:     totalBytes,
+        ProcessedBytes: 0,
+        StartedAt:      time.Now(),
+        UpdatedAt:      time.Now(),
+        Ready:          false,
+        DownloadURL:    downloadURL,
+    }
     s.zipBuildMu.Unlock()
 
     go func() {
+        var buildErr error
         defer func() {
             s.zipBuildMu.Lock()
             delete(s.zipBuilds, zipPath)
+            if status, ok := s.zipStatus[zipPath]; ok {
+                status.UpdatedAt = time.Now()
+                status.Ready = buildErr == nil
+                if buildErr != nil {
+                    status.Error = buildErr.Error()
+                }
+            }
             s.zipBuildMu.Unlock()
         }()
-        _ = buildZipArchive(zipPath, completedFiles)
+
+        buildErr = buildZipArchive(zipPath, completedFiles, func(copied int64) {
+            s.updateZipBuildProgress(zipPath, copied)
+        })
     }()
+}
+
+func (s *httpServer) updateZipBuildProgress(zipPath string, copied int64) {
+    s.zipBuildMu.Lock()
+    defer s.zipBuildMu.Unlock()
+    status, ok := s.zipStatus[zipPath]
+    if !ok {
+        return
+    }
+    status.ProcessedBytes += copied
+    if status.ProcessedBytes > status.TotalBytes {
+        status.ProcessedBytes = status.TotalBytes
+    }
+    status.UpdatedAt = time.Now()
+}
+
+func (s *httpServer) getZipBuildStatus(zipPath string) *zipBuildStatus {
+    s.zipBuildMu.Lock()
+    defer s.zipBuildMu.Unlock()
+    status, ok := s.zipStatus[zipPath]
+    if !ok {
+        return nil
+    }
+    clone := *status
+    return &clone
+}
+
+func (s *httpServer) zipStatusResponse(defaultStatus string, status *zipBuildStatus, fallbackURL string) map[string]interface{} {
+    payload := map[string]interface{}{
+        "status":         defaultStatus,
+        "downloadUrl":    fallbackURL,
+        "progress":       0.0,
+        "etaSeconds":     int64(0),
+        "processedBytes": int64(0),
+        "totalBytes":     int64(0),
+    }
+
+    if status == nil {
+        return payload
+    }
+
+    if status.DownloadURL != "" {
+        payload["downloadUrl"] = status.DownloadURL
+    }
+    payload["processedBytes"] = status.ProcessedBytes
+    payload["totalBytes"] = status.TotalBytes
+
+    if status.TotalBytes > 0 {
+        progress := float64(status.ProcessedBytes) / float64(status.TotalBytes) * 100
+        if progress > 100 {
+            progress = 100
+        }
+        payload["progress"] = progress
+    }
+
+    elapsed := time.Since(status.StartedAt).Seconds()
+    if elapsed > 0 && status.ProcessedBytes > 0 && status.TotalBytes > status.ProcessedBytes {
+        rate := float64(status.ProcessedBytes) / elapsed
+        if rate > 0 {
+            payload["etaSeconds"] = int64(float64(status.TotalBytes-status.ProcessedBytes) / rate)
+        }
+    }
+
+    if status.Error != "" {
+        payload["status"] = "error"
+        payload["error"] = status.Error
+        return payload
+    }
+
+    if status.Ready {
+        payload["status"] = "ready"
+        payload["progress"] = 100.0
+        payload["etaSeconds"] = int64(0)
+    }
+
+    return payload
 }
 
 func (s *httpServer) serveZipFromPath(w http.ResponseWriter, r *http.Request, zipName, zipPath string) {
@@ -616,7 +731,7 @@ func (s *httpServer) serveZipFromPath(w http.ResponseWriter, r *http.Request, zi
     http.ServeContent(w, r, zipName+".zip", zipStat.ModTime(), zipFile)
 }
 
-func buildZipArchive(zipPath string, completedFiles []zipFileEntry) error {
+func buildZipArchive(zipPath string, completedFiles []zipFileEntry, onProgress func(int64)) error {
     tmpPath := zipPath + ".tmp"
     tmpFile, err := os.Create(tmpPath)
     if err != nil {
@@ -644,7 +759,10 @@ func buildZipArchive(zipPath string, completedFiles []zipFileEntry) error {
             continue
         }
 
-        _, _ = io.Copy(dst, src)
+        copied, _ := io.Copy(dst, src)
+        if onProgress != nil && copied > 0 {
+            onProgress(copied)
+        }
         src.Close()
     }
 

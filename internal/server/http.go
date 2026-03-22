@@ -88,6 +88,7 @@ func (s *httpServer) mountAPI(r chi.Router) {
         r.Post("/verify", s.handleVerifyTorrent)
         r.Post("/selection", s.handleUpdateSelection)
         r.Get("/files/{fileIndex}", s.handleDownloadFile)
+        r.Delete("/files/{fileIndex}", s.handleDeleteFile)
         r.Get("/download-zip", s.handleDownloadZip)
     })
 }
@@ -98,7 +99,20 @@ func (s *httpServer) handleCleanupData(w http.ResponseWriter, r *http.Request) {
         respondErrorWithStatus(w, err, http.StatusInternalServerError)
         return
     }
-    respondJSON(w, http.StatusOK, result)
+
+    zipRemoved, zipErr := cleanupTemporaryZipArchives(30 * time.Minute)
+    if zipErr != nil {
+        respondErrorWithStatus(w, zipErr, http.StatusInternalServerError)
+        return
+    }
+
+    respondJSON(w, http.StatusOK, map[string]interface{}{
+        "removed":            result.Removed,
+        "removedCount":       result.RemovedCount,
+        "tempZipRemoved":     zipRemoved,
+        "tempZipRemovedCount": len(zipRemoved),
+        "totalRemovedCount":  result.RemovedCount + len(zipRemoved),
+    })
 }
 
 func (s *httpServer) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -446,6 +460,24 @@ func (s *httpServer) handleDownloadFile(w http.ResponseWriter, r *http.Request) 
     http.ServeContent(w, r, fileName, stat.ModTime(), file)
 }
 
+func (s *httpServer) handleDeleteFile(w http.ResponseWriter, r *http.Request) {
+    infoHash := chi.URLParam(r, "infoHash")
+    fileIndexStr := chi.URLParam(r, "fileIndex")
+
+    fileIndex, err := strconv.Atoi(fileIndexStr)
+    if err != nil {
+        respondError(w, errors.New("invalid file index"))
+        return
+    }
+
+    if err := s.manager.DeleteFile(r.Context(), infoHash, fileIndex); err != nil {
+        respondError(w, err)
+        return
+    }
+
+    respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
     infoHash := chi.URLParam(r, "infoHash")
     
@@ -472,7 +504,7 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
             continue
         }
         
-        filePath, stat, err := s.manager.FilePath(r.Context(), infoHash, fileInfo.Index)
+        filePath, _, err := s.manager.FilePath(r.Context(), infoHash, fileInfo.Index)
         if err != nil {
             continue // Skip files we can't access
         }
@@ -486,7 +518,7 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
             path     string
             filePath string
         }{
-            path:     stat.Name(),
+            path:     fileInfo.Path,
             filePath: filePath,
         })
     }
@@ -496,18 +528,16 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
         return
     }
     
-    // Create temporary file for ZIP
-    tempFile, err := os.CreateTemp("", "tordown-*.zip")
-    if err != nil {
-        respondError(w, errors.New("failed to create temporary file: " + err.Error()))
-        return
+    zipName := strings.ReplaceAll(summary.Name, "\"", "\\\"")
+    if zipName == "" {
+        zipName = infoHash
     }
-    tempPath := tempFile.Name()
-    defer os.Remove(tempPath)
-    defer tempFile.Close()
-    
-    // Create ZIP writer
-    zipWriter := zip.NewWriter(tempFile)
+
+    w.Header().Set("Content-Disposition", "attachment; filename=\""+zipName+".zip\"")
+    w.Header().Set("Content-Type", "application/zip")
+    w.Header().Set("Cache-Control", "no-cache")
+
+    zipWriter := zip.NewWriter(w)
     
     // Add each completed file to the zip
     for _, fileData := range completedFiles {
@@ -516,8 +546,9 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
             continue // Skip files that can't be opened
         }
         
-        // Create entry in zip with the relative path from torrent
-        zipEntry, err := zipWriter.Create(fileData.path)
+        // Use torrent-relative path in the archive when available.
+        archivePath := fileData.path
+        zipEntry, err := zipWriter.Create(archivePath)
         if err != nil {
             file.Close()
             continue
@@ -533,36 +564,44 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
         }
     }
     
-    // Close the zip writer to finalize the archive
     if err := zipWriter.Close(); err != nil {
-        respondError(w, errors.New("failed to finalize zip: " + err.Error()))
         return
     }
-    
-    // Get the size of the completed ZIP file
-    zipStat, err := tempFile.Stat()
+}
+
+func cleanupTemporaryZipArchives(olderThan time.Duration) ([]string, error) {
+    tmpDir := os.TempDir()
+    entries, err := os.ReadDir(tmpDir)
     if err != nil {
-        respondError(w, errors.New("failed to stat zip file: " + err.Error()))
-        return
+        return nil, err
     }
-    
-    // Seek to beginning of temp file for reading
-    if _, err := tempFile.Seek(0, 0); err != nil {
-        respondError(w, errors.New("failed to seek zip file: " + err.Error()))
-        return
+
+    removed := make([]string, 0)
+    cutoff := time.Now().Add(-olderThan)
+
+    for _, entry := range entries {
+        name := entry.Name()
+        if entry.IsDir() {
+            continue
+        }
+        if !strings.HasPrefix(name, "tordown-") || !strings.HasSuffix(name, ".zip") {
+            continue
+        }
+
+        full := filepath.Join(tmpDir, name)
+        info, err := entry.Info()
+        if err != nil {
+            continue
+        }
+        if info.ModTime().After(cutoff) {
+            continue
+        }
+
+        if err := os.Remove(full); err != nil {
+            continue
+        }
+        removed = append(removed, full)
     }
-    
-    // Set headers
-    zipName := strings.ReplaceAll(summary.Name, "\"", "\\\"")
-    if zipName == "" {
-        zipName = infoHash
-    }
-    
-    w.Header().Set("Content-Disposition", "attachment; filename=\""+zipName+".zip\"")
-    w.Header().Set("Content-Type", "application/zip")
-    w.Header().Set("Content-Length", strconv.FormatInt(zipStat.Size(), 10))
-    w.Header().Set("Cache-Control", "no-cache")
-    
-    // Serve the ZIP file
-    http.ServeContent(w, r, zipName+".zip", zipStat.ModTime(), tempFile)
+
+    return removed, nil
 }

@@ -791,6 +791,50 @@ func (m *Manager) VerifyTorrent(ctx context.Context, infoHash string) error {
     return nil
 }
 
+// DeleteFile removes a torrent file from disk by file index.
+func (m *Manager) DeleteFile(ctx context.Context, infoHash string, index int) error {
+    t, err := m.findTorrent(infoHash)
+    if err != nil {
+        return err
+    }
+
+    if _, err := m.waitForInfo(ctx, t); err != nil {
+        return err
+    }
+
+    files := t.Files()
+    if index < 0 || index >= len(files) {
+        return errors.New("file index out of range")
+    }
+
+    root := filepath.Join(m.downloadDir, safeName(t.Name(), normalizeInfoHash(infoHash)))
+    candidate := filepath.Join(root, filepath.FromSlash(files[index].DisplayPath()))
+    absCandidate, ok := m.safeAbsWithinDownloadDir(candidate)
+    if !ok {
+        return errors.New("invalid file path")
+    }
+
+    if err := os.Remove(absCandidate); err != nil && !os.IsNotExist(err) {
+        return err
+    }
+
+    // Prune empty parent directories up to (but not including) the download root.
+    parent := filepath.Dir(absCandidate)
+    base := filepath.Clean(m.downloadDir)
+    for parent != "." && parent != string(os.PathSeparator) && parent != base {
+        if err := os.Remove(parent); err != nil {
+            break
+        }
+        next := filepath.Dir(parent)
+        if next == parent {
+            break
+        }
+        parent = next
+    }
+
+    return nil
+}
+
 // FilePath returns the absolute on-disk path for a torrent file index.
 func (m *Manager) FilePath(ctx context.Context, infoHash string, index int) (string, os.FileInfo, error) {
     t, err := m.findTorrent(infoHash)

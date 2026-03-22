@@ -95,8 +95,12 @@ async function onClearDataClick() {
   try {
     const result = await apiRequest("POST", `${API_BASE}/data/cleanup`, {});
     const removedCount = result && Number.isFinite(result.removedCount) ? result.removedCount : 0;
-    if (removedCount > 0) {
-      showMessage(`Cleared ${removedCount} orphan item(s) from disk.`, false);
+    const tempZipRemovedCount = result && Number.isFinite(result.tempZipRemovedCount) ? result.tempZipRemovedCount : 0;
+    const totalRemoved = result && Number.isFinite(result.totalRemovedCount)
+      ? result.totalRemovedCount
+      : (removedCount + tempZipRemovedCount);
+    if (totalRemoved > 0) {
+      showMessage(`Cleared ${removedCount} orphan item(s) and ${tempZipRemovedCount} temp ZIP file(s).`, false);
     } else {
       showMessage("No orphan data found.", false);
     }
@@ -390,7 +394,7 @@ function renderTorrentDetails(summary, metadataPending) {
             actionButtons = `<a href="${API_BASE}/torrents/${escapeHtml(summary.infoHash)}/files/${file.index}" class="download-file-btn" download title="Download to PC">⬇ Download</a>`;
           }
         } else {
-          actionButtons = `<span class="file-incomplete" title="File not complete">—</span>`;
+          actionButtons = `<button class="delete-file-btn" data-file-index="${file.index}" title="Delete incomplete file from disk">🗑 Delete</button>`;
         }
         
         return `
@@ -887,6 +891,24 @@ document.addEventListener('click', (event) => {
     const fileName = playBtn.dataset.filePath;
     const videoUrl = `${API_BASE}/torrents/${state.detailsHash}/files/${fileIndex}`;
     openMediaPlayer(videoUrl, fileName);
+    return;
+  }
+
+  const deleteBtn = event.target.closest('.delete-file-btn');
+  if (deleteBtn && state.detailsHash) {
+    const fileIndex = deleteBtn.dataset.fileIndex;
+    if (!confirm('Delete this incomplete file from server disk?')) {
+      return;
+    }
+    apiRequest('DELETE', `${API_BASE}/torrents/${state.detailsHash}/files/${fileIndex}`)
+      .then(async () => {
+        showMessage('Incomplete file deleted.', false);
+        await loadTorrentDetails(state.detailsHash, { silent: true, keepPanel: true });
+        await refreshTorrents({ skipDetailUpdate: true });
+      })
+      .catch((error) => {
+        showMessage(error.message, true);
+      });
   }
 });
 

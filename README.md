@@ -15,6 +15,7 @@ TorDown is a minimal web UI for managing torrents backed by [`github.com/anacrol
 - **Server resource monitor** - real-time CPU, RAM, storage, and network speed monitoring
 - **Accurate download size reporting** - storage tile shows true download folder usage
 - **Clear Data action** - remove orphaned leftover files from the download directory
+- **Incomplete file delete action** - remove partial files directly from torrent details
 - Session overview panel with live stats plus an interactive details drawer
 - Static HTML/JS frontend with automatic polling (no external dependencies)
 - Minimalistic, clean UI design for efficient torrent management
@@ -107,6 +108,7 @@ All endpoints live under `/api` and respond with JSON.
 | `POST` | `/api/torrents/{infoHash}/verify` | Trigger recheck |
 | `POST` | `/api/torrents/{infoHash}/selection` | Update file selection for the torrent |
 | `GET` | `/api/torrents/{infoHash}/files/{fileIndex}` | Download a specific file to your PC |
+| `DELETE` | `/api/torrents/{infoHash}/files/{fileIndex}` | Delete a specific incomplete file from disk |
 | `GET` | `/api/torrents/{infoHash}/download-zip` | Download all completed files as a ZIP archive |
 | `GET` | `/api/torrents/{infoHash}/files/{fileIndex}` | **Download completed file to your PC** |
 

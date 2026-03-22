@@ -641,6 +641,20 @@ button:disabled {
   background: #475569;
 }
 
+.delete-file-btn {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.78rem;
+  background: #7f1d1d;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.delete-file-btn:hover {
+  background: #991b1b;
+}
+
 .details-actions button:disabled {
   opacity: 0.4;
   cursor: not-allowed;

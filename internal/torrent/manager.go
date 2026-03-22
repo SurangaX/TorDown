@@ -362,7 +362,14 @@ func (m *Manager) RemoveTorrent(infoHash string, deleteData bool) error {
     m.selMu.Unlock()
 
     if deleteData {
-        m.removeDataTargets(removeTargets)
+        if err := m.removeDataTargets(removeTargets); err != nil {
+            return err
+        }
+
+        // Follow-up sweep catches partial leftovers created during interrupted downloads.
+        if _, err := m.CleanupOrphanData(); err != nil {
+            return err
+        }
     }
 
     return nil
@@ -445,8 +452,9 @@ func topPathComponent(path string) string {
     return strings.TrimSpace(parts[0])
 }
 
-func (m *Manager) removeDataTargets(targets []string) {
+func (m *Manager) removeDataTargets(targets []string) error {
     seen := make(map[string]struct{}, len(targets))
+    var firstErr error
     for _, target := range targets {
         abs, ok := m.safeAbsWithinDownloadDir(target)
         if !ok {
@@ -456,8 +464,12 @@ func (m *Manager) removeDataTargets(targets []string) {
             continue
         }
         seen[abs] = struct{}{}
-        _ = os.RemoveAll(abs)
+        if err := os.RemoveAll(abs); err != nil && firstErr == nil {
+            firstErr = err
+        }
     }
+
+    return firstErr
 }
 
 func (m *Manager) safeAbsWithinDownloadDir(target string) (string, bool) {

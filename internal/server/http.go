@@ -117,7 +117,8 @@ func (s *httpServer) handleCleanupData(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    zipRemoved, zipErr := cleanupTemporaryZipArchives(30 * time.Minute)
+    // Force-clean all temp ZIP artifacts when user explicitly clicks Clear Data.
+    zipRemoved, zipErr := cleanupTemporaryZipArchives(0)
     if zipErr != nil {
         respondErrorWithStatus(w, zipErr, http.StatusInternalServerError)
         return

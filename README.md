@@ -14,7 +14,7 @@ TorDown is a minimal web UI for managing torrents backed by [`github.com/anacrol
 - **Built-in video player** - stream and watch movies directly in the browser (supports MP4, WebM, MKV, and more)
 - **Server resource monitor** - real-time CPU, RAM, storage, and network speed monitoring
 - **Accurate download size reporting** - storage tile shows true download folder usage
-- **Clear Data action** - remove orphaned leftover files from the download directory
+- **Clear Data action** - remove orphaned leftover files and purge ZIP cache files from `/tmp/tordown-zip-cache`
 - **Incomplete file delete action** - remove partial files directly from torrent details
 - **Resumable downloads** - file and ZIP downloads support HTTP range requests for browser pause/resume
 - **Large ZIP stability** - big archives are prepared in background before download starts

@@ -116,6 +116,7 @@ For the selection endpoint, send `{"applySelection": true, "selectedFiles": [0,2
 
 - The Go server uses `chi` for routing and wraps the torrent client behind `internal/torrent`.
 - Static assets live in `web/` and are served directly by the Go process.
+- Long-running file and ZIP download endpoints bypass API request timeout to avoid interrupted large transfers.
 - When Go tooling is unavailable, run `go mod tidy` on a machine with Go installed to generate `go.sum` and download dependencies.
 
 ## License

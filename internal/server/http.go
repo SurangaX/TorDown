@@ -52,7 +52,7 @@ func NewHTTPServer(cfg Config) (http.Handler, error) {
     r.Use(middleware.Logger)
     r.Use(middleware.Recoverer)
     r.Use(middleware.Heartbeat("/healthz"))
-    r.Use(middleware.Timeout(60 * time.Second))
+    r.Use(timeoutExceptDownloads(60 * time.Second))
 
     r.Route("/api", srv.mountAPI)
 
@@ -309,6 +309,22 @@ func (s *httpServer) spaHandler(fs http.Handler) http.Handler {
 
 func (s *httpServer) notFound(w http.ResponseWriter, r *http.Request) {
     respondErrorWithStatus(w, errors.New("resource not found"), http.StatusNotFound)
+}
+
+func timeoutExceptDownloads(timeout time.Duration) func(http.Handler) http.Handler {
+    timeoutMw := middleware.Timeout(timeout)
+
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            path := r.URL.Path
+            if strings.HasSuffix(path, "/download-zip") || strings.Contains(path, "/files/") {
+                next.ServeHTTP(w, r)
+                return
+            }
+
+            timeoutMw(next).ServeHTTP(w, r)
+        })
+    }
 }
 
 func decodeBase64Payload(value string) ([]byte, error) {

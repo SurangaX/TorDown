@@ -40,7 +40,8 @@ func main() {
 		Addr:         addr,
 		Handler:      h,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 120 * time.Second,
+		// Keep write timeout disabled to allow long-running download streams.
+		WriteTimeout: 0,
 		IdleTimeout:  120 * time.Second,
 	}
 

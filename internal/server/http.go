@@ -527,68 +527,146 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
         respondError(w, errors.New("no completed files available for download"))
         return
     }
-    
+
     zipName := strings.ReplaceAll(summary.Name, "\"", "\\\"")
     if zipName == "" {
         zipName = infoHash
     }
 
-    w.Header().Set("Content-Disposition", "attachment; filename=\""+zipName+".zip\"")
-    w.Header().Set("Content-Type", "application/zip")
-    w.Header().Set("Cache-Control", "no-cache")
-
-    zipWriter := zip.NewWriter(w)
-    
-    // Add each completed file to the zip
-    for _, fileData := range completedFiles {
-        file, err := os.Open(fileData.filePath)
-        if err != nil {
-            continue // Skip files that can't be opened
-        }
-        
-        // Use torrent-relative path in the archive when available.
-        archivePath := fileData.path
-        zipEntry, err := zipWriter.Create(archivePath)
-        if err != nil {
-            file.Close()
-            continue
-        }
-        
-        // Copy file contents to zip
-        _, err = io.Copy(zipEntry, file)
-        file.Close()
-        
-        if err != nil {
-            // If copy fails, continue with next file
-            continue
-        }
-    }
-    
-    if err := zipWriter.Close(); err != nil {
+    cacheDir := filepath.Join(os.TempDir(), "tordown-zip-cache")
+    if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+        respondError(w, errors.New("failed to prepare zip cache: "+err.Error()))
         return
     }
+
+    safeInfoHash := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(infoHash, "0x")))
+    zipPath := filepath.Join(cacheDir, safeInfoHash+"-"+strconv.FormatInt(summary.BytesCompleted, 10)+".zip")
+    if _, err := os.Stat(zipPath); os.IsNotExist(err) {
+        if err := buildZipArchive(zipPath, completedFiles); err != nil {
+            respondError(w, errors.New("failed to create zip: "+err.Error()))
+            return
+        }
+    }
+
+    zipFile, err := os.Open(zipPath)
+    if err != nil {
+        respondError(w, errors.New("failed to open zip: "+err.Error()))
+        return
+    }
+    defer zipFile.Close()
+
+    zipStat, err := zipFile.Stat()
+    if err != nil {
+        respondError(w, errors.New("failed to stat zip: "+err.Error()))
+        return
+    }
+
+    w.Header().Set("Content-Disposition", "attachment; filename=\""+zipName+".zip\"")
+    w.Header().Set("Content-Type", "application/zip")
+    w.Header().Set("Content-Length", strconv.FormatInt(zipStat.Size(), 10))
+    w.Header().Set("Accept-Ranges", "bytes")
+    w.Header().Set("Cache-Control", "no-cache")
+
+    http.ServeContent(w, r, zipName+".zip", zipStat.ModTime(), zipFile)
+}
+
+func buildZipArchive(zipPath string, completedFiles []struct {
+    path     string
+    filePath string
+}) error {
+    tmpPath := zipPath + ".tmp"
+    tmpFile, err := os.Create(tmpPath)
+    if err != nil {
+        return err
+    }
+
+    zipWriter := zip.NewWriter(tmpFile)
+    for _, fileData := range completedFiles {
+        src, err := os.Open(fileData.filePath)
+        if err != nil {
+            continue
+        }
+
+        entryPath := filepath.ToSlash(filepath.Clean(fileData.path))
+        if entryPath == "" || entryPath == "." {
+            src.Close()
+            continue
+        }
+
+        h := &zip.FileHeader{Name: entryPath, Method: zip.Deflate}
+        h.SetModTime(time.Now())
+        dst, err := zipWriter.CreateHeader(h)
+        if err != nil {
+            src.Close()
+            continue
+        }
+
+        _, _ = io.Copy(dst, src)
+        src.Close()
+    }
+
+    if err := zipWriter.Close(); err != nil {
+        tmpFile.Close()
+        _ = os.Remove(tmpPath)
+        return err
+    }
+    if err := tmpFile.Close(); err != nil {
+        _ = os.Remove(tmpPath)
+        return err
+    }
+
+    if err := os.Rename(tmpPath, zipPath); err != nil {
+        _ = os.Remove(tmpPath)
+        return err
+    }
+
+    return nil
 }
 
 func cleanupTemporaryZipArchives(olderThan time.Duration) ([]string, error) {
     tmpDir := os.TempDir()
-    entries, err := os.ReadDir(tmpDir)
+
+    removed := make([]string, 0)
+    cutoff := time.Now().Add(-olderThan)
+
+    removedRoot, err := cleanupZipDir(tmpDir, cutoff, false)
     if err != nil {
+        return nil, err
+    }
+    removed = append(removed, removedRoot...)
+
+    cacheDir := filepath.Join(tmpDir, "tordown-zip-cache")
+    removedCache, _ := cleanupZipDir(cacheDir, cutoff, true)
+    removed = append(removed, removedCache...)
+
+    return removed, nil
+}
+
+func cleanupZipDir(dir string, cutoff time.Time, removeAnyZip bool) ([]string, error) {
+    entries, err := os.ReadDir(dir)
+    if err != nil {
+        if os.IsNotExist(err) {
+            return nil, nil
+        }
         return nil, err
     }
 
     removed := make([]string, 0)
-    cutoff := time.Now().Add(-olderThan)
 
     for _, entry := range entries {
         name := entry.Name()
         if entry.IsDir() {
             continue
         }
-        if !strings.HasPrefix(name, "tordown-") || !strings.HasSuffix(name, ".zip") {
+        if removeAnyZip {
+            if !strings.HasSuffix(name, ".zip") {
+                continue
+            }
+        } else if !strings.HasPrefix(name, "tordown-") || !strings.HasSuffix(name, ".zip") {
             continue
         }
 
-        full := filepath.Join(tmpDir, name)
+        full := filepath.Join(dir, name)
         info, err := entry.Info()
         if err != nil {
             continue

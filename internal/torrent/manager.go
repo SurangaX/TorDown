@@ -339,6 +339,7 @@ func (m *Manager) ListTorrents() []TorrentSummary {
     torrents := m.client.Torrents()
     summaries := make([]TorrentSummary, 0, len(torrents))
     for _, t := range torrents {
+        m.ensurePersistedFromLiveTorrent(t)
         summaries = append(summaries, m.buildSummary(t))
     }
     sort.SliceStable(summaries, func(i, j int) bool {
@@ -718,6 +719,62 @@ func (m *Manager) setPersistedPaused(infoHash string, paused bool) {
         _ = m.saveStateLocked()
     }
     m.persistMu.Unlock()
+}
+
+func (m *Manager) ensurePersistedFromLiveTorrent(t *atorrent.Torrent) {
+    if t == nil {
+        return
+    }
+
+    infoHash := formatInfoHash(t.InfoHash())
+    normalized := normalizeInfoHash(infoHash)
+
+    m.persistMu.Lock()
+    if _, exists := m.state[normalized]; exists {
+        m.persistMu.Unlock()
+        return
+    }
+
+    selectedFiles, hasSelection := selectedIndicesFromTorrent(t)
+    entry := persistedTorrent{
+        SourceType:    "magnet",
+        Source:        "magnet:?xt=urn:btih:" + strings.ToUpper(normalized),
+        SelectedFiles: selectedFiles,
+        HasSelection:  hasSelection,
+        AddedAt:       time.Now(),
+    }
+
+    m.mu.RLock()
+    if createdAt, ok := m.created[normalized]; ok && !createdAt.IsZero() {
+        entry.AddedAt = createdAt
+    }
+    _, entry.Paused = m.paused[normalized]
+    m.mu.RUnlock()
+
+    m.state[normalized] = entry
+    _ = m.saveStateLocked()
+    m.persistMu.Unlock()
+}
+
+func selectedIndicesFromTorrent(t *atorrent.Torrent) ([]int, bool) {
+    files := t.Files()
+    if len(files) == 0 {
+        return nil, false
+    }
+
+    selected := make([]int, 0, len(files))
+    for idx, f := range files {
+        if f.Priority() > atorrent.PiecePriorityNone {
+            selected = append(selected, idx)
+        }
+    }
+
+    // If all files are selected, treat it as default behavior (no explicit selection override).
+    if len(selected) == len(files) {
+        return nil, false
+    }
+
+    return selected, true
 }
 
 // VerifyTorrent triggers a full recheck of downloaded data.

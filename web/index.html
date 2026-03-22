@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TorDown</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Notification Bar -->
+  <div id="notification-bar" class="notification-bar" role="status" aria-live="polite"></div>
+
+  <header class="app-header">
+    <h1>TorDown</h1>
+    <p class="subtitle">Minimal torrent management UI</p>
+  </header>
+
+  <main class="content">
+    <section class="card">
+      <h2>Add Torrent</h2>
+      <form id="add-torrent-form" class="form-grid">
+        <label>
+          Magnet URI
+          <input type="url" id="magnet-uri" name="magnet" placeholder="magnet:?xt=..." autocomplete="off">
+        </label>
+        <label>
+          Torrent URL
+          <input type="url" id="torrent-url" name="torrentUrl" placeholder="https://example.com/file.torrent" autocomplete="off">
+        </label>
+        <label>
+          Torrent File
+          <input type="file" id="torrent-file" accept=".torrent">
+        </label>
+        <button type="submit">Add Torrent</button>
+        <p class="hint" id="source-hint">Provide exactly one source: magnet link, torrent URL, or upload a .torrent file.</p>
+      </form>
+    </section>
+
+    <div class="stats-container">
+      <section class="card stats-card" aria-live="polite">
+        <h2>Session Overview</h2>
+        <div class="stats-grid">
+          <article class="stats-tile">
+            <span class="tile-label">Torrents</span>
+            <span class="tile-value" id="stat-torrents">0</span>
+          </article>
+          <article class="stats-tile">
+            <span class="tile-label">Active Peers</span>
+            <span class="tile-value" id="stat-peers">0</span>
+          </article>
+          <article class="stats-tile">
+            <span class="tile-label">Downloaded</span>
+            <span class="tile-value" id="stat-downloaded">0 B</span>
+          </article>
+          <article class="stats-tile">
+            <span class="tile-label">Uploaded</span>
+            <span class="tile-value" id="stat-uploaded">0 B</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="card system-card" aria-live="polite">
+        <h2>Server Resources</h2>
+        <div class="system-grid">
+          <article class="system-tile">
+            <span class="system-icon">💻</span>
+            <span class="system-value" id="cpu-value">0%</span>
+            <span class="system-label">CPU</span>
+            <span class="system-detail" id="cpu-cores">0 cores</span>
+          </article>
+          
+          <article class="system-tile">
+            <span class="system-icon">🧠</span>
+            <span class="system-value" id="ram-value">0%</span>
+            <span class="system-label">RAM</span>
+            <span class="system-detail" id="ram-detail">0 / 0 GB</span>
+          </article>
+          
+          <article class="system-tile">
+            <span class="system-icon">💾</span>
+            <span class="system-value" id="disk-value">0%</span>
+            <span class="system-label">Storage</span>
+            <span class="system-detail" id="disk-detail">0 / 0 GB</span>
+          </article>
+          
+          <article class="system-tile">
+            <span class="system-icon">🌐</span>
+            <span class="system-label">Network</span>
+            <div class="network-speeds">
+              <div class="speed-item">
+                <span class="speed-label">↓</span>
+                <span class="speed-value" id="net-down">0 B/s</span>
+              </div>
+              <div class="speed-item">
+                <span class="speed-label">↑</span>
+                <span class="speed-value" id="net-up">0 B/s</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-header">
+        <h2>Torrents</h2>
+        <button id="refresh-btn" type="button">Refresh</button>
+      </div>
+      <div class="table-wrapper">
+        <table id="torrent-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Progress</th>
+              <th>Speeds</th>
+              <th>ETA</th>
+              <th>Peers</th>
+              <th>Data</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Torrent Details Modal -->
+  <div id="details-modal" class="modal" hidden>
+    <div class="modal-content modal-details">
+      <div class="modal-header">
+        <h3 id="details-modal-title">Torrent Details</h3>
+        <button type="button" id="close-details" class="close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="details-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Media Player Modal -->
+  <div id="media-player-modal" class="modal" hidden>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="media-title">Media Player</h3>
+        <button type="button" id="close-player" class="close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <video id="media-player" controls autoplay>
+          <source id="media-source" src="" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Selection Modal -->
+  <div id="file-selection-modal" class="modal" hidden>
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3 id="selection-title">Select Files to Download</h3>
+        <button type="button" id="close-selection" class="close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="selection-info">Choose which files you want to download. Unselected files will be skipped.</p>
+        <div class="selection-actions-row">
+          <div class="selection-actions-left">
+            <button type="button" id="select-all-files">Select All</button>
+            <button type="button" id="select-none-files">Select None</button>
+          </div>
+          <div class="selection-actions-right">
+            <button type="button" id="start-download-selected" class="btn-primary">Start Download</button>
+            <button type="button" id="start-download-all" class="btn-secondary">Download All Files</button>
+          </div>
+        </div>
+        <div id="selection-files-list" class="selection-files"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

@@ -991,7 +991,24 @@ func (m *Manager) buildSummary(t *atorrent.Torrent) TorrentSummary {
     }
 }
 
-func selectedOrAllBytes(t *atorrent.Torrent) (int64, int64) {
+func selectedOrAllBytes(t *atorrent.Torrent) (bytesCompleted int64, total int64) {
+    if t == nil {
+        return 0, 0
+    }
+
+    // Before metadata is available, anacrolix can panic on Files(); use coarse totals.
+    if t.Info() == nil {
+        return t.BytesCompleted(), t.Length()
+    }
+
+    // Defensive guard for edge cases in library state transitions.
+    defer func() {
+        if recover() != nil {
+            bytesCompleted = t.BytesCompleted()
+            total = t.Length()
+        }
+    }()
+
     files := t.Files()
     if len(files) == 0 {
         return t.BytesCompleted(), t.Length()

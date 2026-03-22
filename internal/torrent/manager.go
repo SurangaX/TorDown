@@ -329,6 +329,23 @@ func (m *Manager) RemoveTorrent(infoHash string, deleteData bool) error {
     }
 
     name := safeName(t.Name(), normalized)
+    removeTargets := make([]string, 0, 4)
+    if deleteData {
+        removeTargets = append(removeTargets, filepath.Join(m.downloadDir, filepath.FromSlash(name)))
+
+        // Capture per-file paths before dropping the torrent so single-file layouts are cleaned too.
+        for _, f := range t.Files() {
+            rel := filepath.FromSlash(f.DisplayPath())
+            if rel == "." || rel == "" {
+                continue
+            }
+            removeTargets = append(removeTargets,
+                filepath.Join(m.downloadDir, filepath.FromSlash(name), rel),
+                filepath.Join(m.downloadDir, rel),
+            )
+        }
+    }
+
     t.Drop()
 
     m.mu.Lock()
@@ -344,14 +361,50 @@ func (m *Manager) RemoveTorrent(infoHash string, deleteData bool) error {
     delete(m.pendingSelections, normalized)
     m.selMu.Unlock()
 
-    if deleteData && name != "" {
-        path := filepath.Join(m.downloadDir, filepath.FromSlash(name))
-        if strings.HasPrefix(path, m.downloadDir) {
-            _ = os.RemoveAll(path)
-        }
+    if deleteData {
+        m.removeDataTargets(removeTargets)
     }
 
     return nil
+}
+
+func (m *Manager) removeDataTargets(targets []string) {
+    seen := make(map[string]struct{}, len(targets))
+    for _, target := range targets {
+        abs, ok := m.safeAbsWithinDownloadDir(target)
+        if !ok {
+            continue
+        }
+        if _, exists := seen[abs]; exists {
+            continue
+        }
+        seen[abs] = struct{}{}
+        _ = os.RemoveAll(abs)
+    }
+}
+
+func (m *Manager) safeAbsWithinDownloadDir(target string) (string, bool) {
+    if strings.TrimSpace(target) == "" {
+        return "", false
+    }
+
+    abs, err := filepath.Abs(target)
+    if err != nil {
+        return "", false
+    }
+
+    cleanBase := filepath.Clean(m.downloadDir)
+    cleanAbs := filepath.Clean(abs)
+    if cleanAbs == cleanBase {
+        return "", false
+    }
+
+    prefix := cleanBase + string(os.PathSeparator)
+    if !strings.HasPrefix(cleanAbs, prefix) {
+        return "", false
+    }
+
+    return cleanAbs, true
 }
 
 // PauseTorrent stops data transfer for the specified torrent.

@@ -268,15 +268,11 @@ async function onTableAction(event) {
         showMessage("Torrent resumed.", false);
         break;
       case "remove":
-        if (!confirm("Remove torrent from session?")) {
+        if (!confirm("Permanently remove this torrent and its downloaded data from the server?")) {
           return;
         }
-        const deleteData = confirm("Delete downloaded data from disk as well?");
-        await apiRequest(
-          "DELETE",
-          `${API_BASE}/torrents/${hash}${deleteData ? "?deleteData=true" : ""}`
-        );
-        showMessage(deleteData ? "Torrent and data removed." : "Torrent removed.", false);
+        await apiRequest("DELETE", `${API_BASE}/torrents/${hash}?deleteData=true`);
+        showMessage("Torrent and data removed.", false);
         break;
       case "details":
         if (state.detailsHash === hash && !elements.detailsModal.hidden) {

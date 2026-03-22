@@ -20,6 +20,8 @@ import (
     "tordown/internal/torrent"
 )
 
+const largeZipStreamThreshold int64 = 1 << 30 // 1 GiB
+
 // Config wires dependencies for the HTTP server facade.
 type Config struct {
     Manager     *torrent.Manager
@@ -496,7 +498,9 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
     completedFiles := []struct {
         path     string
         filePath string
+        size     int64
     }{}
+    var completedTotalBytes int64
     
     for _, fileInfo := range summary.Files {
         // Only include files that are 100% complete
@@ -517,10 +521,13 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
         completedFiles = append(completedFiles, struct {
             path     string
             filePath string
+            size     int64
         }{
             path:     fileInfo.Path,
             filePath: filePath,
+            size:     fileInfo.BytesCompleted,
         })
+        completedTotalBytes += fileInfo.BytesCompleted
     }
     
     if len(completedFiles) == 0 {
@@ -541,6 +548,15 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
 
     safeInfoHash := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(infoHash, "0x")))
     zipPath := filepath.Join(cacheDir, safeInfoHash+"-"+strconv.FormatInt(summary.BytesCompleted, 10)+".zip")
+
+    // For large archives, start streaming immediately to avoid long header wait.
+    if completedTotalBytes >= largeZipStreamThreshold || r.URL.Query().Get("stream") == "1" {
+        if err := streamZipArchive(w, zipName, completedFiles); err != nil {
+            respondError(w, errors.New("failed to stream zip: "+err.Error()))
+        }
+        return
+    }
+
     if _, err := os.Stat(zipPath); os.IsNotExist(err) {
         if err := buildZipArchive(zipPath, completedFiles); err != nil {
             respondError(w, errors.New("failed to create zip: "+err.Error()))
@@ -573,6 +589,7 @@ func (s *httpServer) handleDownloadZip(w http.ResponseWriter, r *http.Request) {
 func buildZipArchive(zipPath string, completedFiles []struct {
     path     string
     filePath string
+    size     int64
 }) error {
     tmpPath := zipPath + ".tmp"
     tmpFile, err := os.Create(tmpPath)
@@ -593,7 +610,7 @@ func buildZipArchive(zipPath string, completedFiles []struct {
             continue
         }
 
-        h := &zip.FileHeader{Name: entryPath, Method: zip.Deflate}
+        h := &zip.FileHeader{Name: entryPath, Method: zip.Store}
         h.SetModTime(time.Now())
         dst, err := zipWriter.CreateHeader(h)
         if err != nil {
@@ -621,6 +638,46 @@ func buildZipArchive(zipPath string, completedFiles []struct {
     }
 
     return nil
+}
+
+func streamZipArchive(w http.ResponseWriter, zipName string, completedFiles []struct {
+    path     string
+    filePath string
+    size     int64
+}) error {
+    w.Header().Set("Content-Disposition", "attachment; filename=\""+zipName+".zip\"")
+    w.Header().Set("Content-Type", "application/zip")
+    w.Header().Set("Cache-Control", "no-cache")
+
+    zipWriter := zip.NewWriter(w)
+    for _, fileData := range completedFiles {
+        src, err := os.Open(fileData.filePath)
+        if err != nil {
+            continue
+        }
+
+        entryPath := filepath.ToSlash(filepath.Clean(fileData.path))
+        if entryPath == "" || entryPath == "." {
+            src.Close()
+            continue
+        }
+
+        h := &zip.FileHeader{Name: entryPath, Method: zip.Store}
+        h.SetModTime(time.Now())
+        dst, err := zipWriter.CreateHeader(h)
+        if err != nil {
+            src.Close()
+            continue
+        }
+
+        if _, err := io.Copy(dst, src); err != nil {
+            src.Close()
+            continue
+        }
+        src.Close()
+    }
+
+    return zipWriter.Close()
 }
 
 func cleanupTemporaryZipArchives(olderThan time.Duration) ([]string, error) {

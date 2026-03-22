@@ -1,6 +1,9 @@
 package server
 
 import (
+	"io/fs"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
@@ -37,6 +40,8 @@ type DiskInfo struct {
 	Used        uint64  `json:"used"`
 	Free        uint64  `json:"free"`
 	UsagePercent float64 `json:"usagePercent"`
+	DownloadDirUsed uint64  `json:"downloadDirUsed"`
+	DownloadDirUsagePercent float64 `json:"downloadDirUsagePercent"`
 }
 
 type NetworkInfo struct {
@@ -50,6 +55,11 @@ var (
 	lastNetStats      []net.IOCountersStat
 	lastNetStatsTime  time.Time
 	netStatsMu        sync.Mutex
+
+	lastDirSizePath  string
+	lastDirSizeValue uint64
+	lastDirSizeAt    time.Time
+	dirSizeMu        sync.Mutex
 )
 
 // GetSystemResources collects current system resource information
@@ -81,6 +91,14 @@ func GetSystemResources(dataDir string) (*SystemResources, error) {
 		resources.Disk.Used = diskInfo.Used
 		resources.Disk.Free = diskInfo.Free
 		resources.Disk.UsagePercent = diskInfo.UsedPercent
+
+		dirSize, dirErr := getDirectorySizeCached(dataDir)
+		if dirErr == nil {
+			resources.Disk.DownloadDirUsed = dirSize
+			if diskInfo.Total > 0 {
+				resources.Disk.DownloadDirUsagePercent = float64(dirSize) / float64(diskInfo.Total) * 100
+			}
+		}
 	}
 
 	// Network info
@@ -90,6 +108,71 @@ func GetSystemResources(dataDir string) (*SystemResources, error) {
 	}
 
 	return resources, nil
+}
+
+func getDirectorySizeCached(dir string) (uint64, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return 0, err
+	}
+
+	now := time.Now()
+	dirSizeMu.Lock()
+	if abs == lastDirSizePath && now.Sub(lastDirSizeAt) < 15*time.Second {
+		cached := lastDirSizeValue
+		dirSizeMu.Unlock()
+		return cached, nil
+	}
+	dirSizeMu.Unlock()
+
+	size, err := calculateDirectorySize(abs)
+	if err != nil {
+		return 0, err
+	}
+
+	dirSizeMu.Lock()
+	lastDirSizePath = abs
+	lastDirSizeValue = size
+	lastDirSizeAt = now
+	dirSizeMu.Unlock()
+
+	return size, nil
+}
+
+func calculateDirectorySize(root string) (uint64, error) {
+	if _, err := os.Stat(root); err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+
+	var total uint64
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			if os.IsNotExist(walkErr) {
+				return nil
+			}
+			return walkErr
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if info.Size() > 0 {
+			total += uint64(info.Size())
+		}
+		return nil
+	})
+
+	return total, err
 }
 
 func getNetworkStats() (*NetworkInfo, error) {

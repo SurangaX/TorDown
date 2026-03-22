@@ -663,15 +663,14 @@ func (m *Manager) waitForInfo(ctx context.Context, t *atorrent.Torrent) (*metain
 
 func (m *Manager) buildSummary(t *atorrent.Torrent) TorrentSummary {
     infoHash := formatInfoHash(t.InfoHash())
-    bytesCompleted := t.BytesCompleted()
-    total := t.Length()
+    bytesCompleted, total := selectedOrAllBytes(t)
     percent := 0.0
     if total > 0 {
         percent = float64(bytesCompleted) / float64(total) * 100
     }
-    bytesMissing := int64(0)
-    if total > 0 {
-        bytesMissing = t.BytesMissing()
+    bytesMissing := total - bytesCompleted
+    if bytesMissing < 0 {
+        bytesMissing = 0
     }
 
     stats := t.Stats()
@@ -708,6 +707,33 @@ func (m *Manager) buildSummary(t *atorrent.Torrent) TorrentSummary {
         ActivePeers:     stats.TorrentGauges.ActivePeers,
         AddedAt:         createdAt,
     }
+}
+
+func selectedOrAllBytes(t *atorrent.Torrent) (int64, int64) {
+    files := t.Files()
+    if len(files) == 0 {
+        return t.BytesCompleted(), t.Length()
+    }
+
+    var selectedTotal int64
+    var selectedCompleted int64
+    var selectedCount int
+
+    for _, f := range files {
+        if f.Priority() <= atorrent.PiecePriorityNone {
+            continue
+        }
+        selectedCount++
+        selectedTotal += f.Length()
+        selectedCompleted += f.BytesCompleted()
+    }
+
+    // If nothing is explicitly selected yet, fall back to full torrent totals.
+    if selectedCount == 0 {
+        return t.BytesCompleted(), t.Length()
+    }
+
+    return selectedCompleted, selectedTotal
 }
 
 func (m *Manager) computeRates(key string, stats atorrent.TorrentStats) (float64, float64) {

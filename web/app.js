@@ -15,6 +15,7 @@ const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm
 document.addEventListener("DOMContentLoaded", () => {
   elements.form = document.getElementById("add-torrent-form");
   elements.refreshBtn = document.getElementById("refresh-btn");
+  elements.clearDataBtn = document.getElementById("clear-data-btn");
   elements.tableBody = document.querySelector("#torrent-table tbody");
   elements.notificationBar = document.getElementById("notification-bar");
   elements.magnetInput = document.getElementById("magnet-uri");
@@ -45,6 +46,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   elements.form.addEventListener("submit", onAddTorrentSubmit);
   elements.refreshBtn.addEventListener("click", () => refreshTorrents());
+  if (elements.clearDataBtn) {
+    elements.clearDataBtn.addEventListener("click", onClearDataClick);
+  }
   elements.tableBody.addEventListener("click", onTableAction);
   elements.closeDetails.addEventListener("click", closeDetailsPanel);
   elements.detailsModal.addEventListener("click", (event) => {
@@ -79,6 +83,26 @@ function onVisibilityChange() {
   } else if (!document.hidden && !state.timer) {
     refreshTorrents();
     state.timer = setInterval(refreshTorrents, POLL_INTERVAL_MS);
+  }
+}
+
+async function onClearDataClick() {
+  const warning = "Clear orphan data from server disk? Active torrent files will be kept.";
+  if (!confirm(warning)) {
+    return;
+  }
+
+  try {
+    const result = await apiRequest("POST", `${API_BASE}/data/cleanup`, {});
+    const removedCount = result && Number.isFinite(result.removedCount) ? result.removedCount : 0;
+    if (removedCount > 0) {
+      showMessage(`Cleared ${removedCount} orphan item(s) from disk.`, false);
+    } else {
+      showMessage("No orphan data found.", false);
+    }
+    await refreshTorrents();
+  } catch (error) {
+    showMessage(error.message, true);
   }
 }
 

@@ -13,6 +13,7 @@ TorDown is a minimal web UI for managing torrents backed by [`github.com/anacrol
 - **Download entire torrent as ZIP** - packages all completed files into a single archive
 - **Built-in video player** - stream and watch movies directly in the browser (supports MP4, WebM, MKV, and more)
 - **Server resource monitor** - real-time CPU, RAM, storage, and network speed monitoring
+- **Clear Data action** - remove orphaned leftover files from the download directory
 - Session overview panel with live stats plus an interactive details drawer
 - Static HTML/JS frontend with automatic polling (no external dependencies)
 - Minimalistic, clean UI design for efficient torrent management
@@ -95,6 +96,7 @@ All endpoints live under `/api` and respond with JSON.
 | `GET` | `/api/health` | Health check |
 | `GET` | `/api/stats` | Aggregate client stats |
 | `GET` | `/api/system` | Server resource monitoring (CPU, RAM, storage, network) |
+| `POST` | `/api/data/cleanup` | Remove orphaned data not tied to active torrents |
 | `GET` | `/api/torrents` | List torrents |
 | `POST` | `/api/torrents` | Add by magnet URI (`magnetUri`), torrent URL (`torrentUrl`), or file (`torrentFile` base64) |
 | `GET` | `/api/torrents/{infoHash}` | Detailed torrent info (returns `202 Accepted` while metadata is pending) |

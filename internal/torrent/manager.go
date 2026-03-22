@@ -368,6 +368,83 @@ func (m *Manager) RemoveTorrent(infoHash string, deleteData bool) error {
     return nil
 }
 
+// CleanupOrphanData removes entries in downloadDir that are not referenced by active torrents.
+func (m *Manager) CleanupOrphanData() (CleanupResult, error) {
+    entries, err := os.ReadDir(m.downloadDir)
+    if err != nil {
+        return CleanupResult{}, err
+    }
+
+    protected := m.activeDataRoots()
+    result := CleanupResult{Removed: make([]string, 0)}
+
+    for _, entry := range entries {
+        name := strings.TrimSpace(entry.Name())
+        if name == "" {
+            continue
+        }
+        if _, keep := protected[name]; keep {
+            continue
+        }
+
+        target, ok := m.safeAbsWithinDownloadDir(filepath.Join(m.downloadDir, name))
+        if !ok {
+            continue
+        }
+        if err := os.RemoveAll(target); err != nil {
+            return result, err
+        }
+
+        result.Removed = append(result.Removed, name)
+    }
+
+    sort.Strings(result.Removed)
+    result.RemovedCount = len(result.Removed)
+    return result, nil
+}
+
+func (m *Manager) activeDataRoots() map[string]struct{} {
+    roots := make(map[string]struct{})
+    torrents := m.client.Torrents()
+
+    for _, t := range torrents {
+        infoHash := formatInfoHash(t.InfoHash())
+        nameRoot := topPathComponent(safeName(t.Name(), infoHash))
+        if nameRoot != "" {
+            roots[nameRoot] = struct{}{}
+        }
+
+        roots[infoHash] = struct{}{}
+
+        for _, f := range t.Files() {
+            fileRoot := topPathComponent(f.DisplayPath())
+            if fileRoot != "" {
+                roots[fileRoot] = struct{}{}
+            }
+        }
+    }
+
+    return roots
+}
+
+func topPathComponent(path string) string {
+    if strings.TrimSpace(path) == "" {
+        return ""
+    }
+
+    normalized := filepath.ToSlash(filepath.Clean(filepath.FromSlash(path)))
+    normalized = strings.TrimPrefix(normalized, "./")
+    if normalized == "." || normalized == "" {
+        return ""
+    }
+
+    parts := strings.Split(normalized, "/")
+    if len(parts) == 0 {
+        return ""
+    }
+    return strings.TrimSpace(parts[0])
+}
+
 func (m *Manager) removeDataTargets(targets []string) {
     seen := make(map[string]struct{}, len(targets))
     for _, target := range targets {
@@ -744,6 +821,12 @@ type ClientStats struct {
     PendingPeers   int   `json:"pendingPeers"`
     BytesDownloaded int64 `json:"bytesDownloaded"`
     BytesUploaded   int64 `json:"bytesUploaded"`
+}
+
+// CleanupResult reports what orphan data entries were removed from disk.
+type CleanupResult struct {
+    Removed      []string `json:"removed"`
+    RemovedCount int      `json:"removedCount"`
 }
 
 func normalizeInfoHash(value string) string {

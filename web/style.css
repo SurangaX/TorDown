@@ -277,6 +277,27 @@ button:disabled {
   color: #f1f5f9;
 }
 
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.card-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.card-header .btn-danger {
+  background: #dc2626;
+}
+
+.card-header .btn-danger:hover {
+  background: #b91c1c;
+}
+
 .table-wrapper {
   overflow-x: auto;
   margin-top: 1rem;

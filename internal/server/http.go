@@ -76,6 +76,7 @@ func (s *httpServer) mountAPI(r chi.Router) {
     r.Get("/health", s.handleHealth)
     r.Get("/stats", s.handleStats)
     r.Get("/system", s.handleSystemResources)
+    r.Post("/data/cleanup", s.handleCleanupData)
     r.Get("/torrents", s.handleListTorrents)
     r.Post("/torrents", s.handleAddTorrent)
 
@@ -89,6 +90,15 @@ func (s *httpServer) mountAPI(r chi.Router) {
         r.Get("/files/{fileIndex}", s.handleDownloadFile)
         r.Get("/download-zip", s.handleDownloadZip)
     })
+}
+
+func (s *httpServer) handleCleanupData(w http.ResponseWriter, r *http.Request) {
+    result, err := s.manager.CleanupOrphanData()
+    if err != nil {
+        respondErrorWithStatus(w, err, http.StatusInternalServerError)
+        return
+    }
+    respondJSON(w, http.StatusOK, result)
 }
 
 func (s *httpServer) handleHealth(w http.ResponseWriter, r *http.Request) {

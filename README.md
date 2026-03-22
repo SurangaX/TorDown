@@ -36,6 +36,47 @@ go run ./cmd/server
 
 By default the server listens on `:8080` and stores data in `./downloads`. Visit `http://localhost:8080` to access the UI.
 
+## Ubuntu Server Startup
+
+### Quick Start (Foreground)
+
+Use this when you want to run TorDown directly in your shell:
+
+```bash
+chmod +x scripts/start-ubuntu.sh
+./scripts/start-ubuntu.sh
+```
+
+Optional environment overrides:
+
+```bash
+TORDOWN_LISTEN_ADDR=:8080 TORDOWN_DOWNLOAD_DIR=/srv/tordown/downloads ./scripts/start-ubuntu.sh
+```
+
+### Production Start (systemd, Auto-Start On Boot)
+
+Use this on an Ubuntu server for persistent background operation:
+
+```bash
+chmod +x scripts/install-ubuntu-service.sh
+sudo ./scripts/install-ubuntu-service.sh
+```
+
+Useful service commands:
+
+```bash
+sudo systemctl status tordown
+sudo journalctl -u tordown -f
+sudo systemctl restart tordown
+```
+
+Service environment is stored in `/etc/tordown.env`.
+After changing it, reload with:
+
+```bash
+sudo systemctl restart tordown
+```
+
 ### Configuration
 
 Environment variables:

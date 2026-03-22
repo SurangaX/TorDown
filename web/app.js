@@ -267,7 +267,7 @@ function renderTorrents(torrents) {
             <div class="actions">
               <button type="button" data-action="${resumeAction}" data-hash="${infoHash}">${resumeLabel}</button>
               <button type="button" data-action="details" data-hash="${infoHash}">${detailsLabel}</button>
-              <a href="${API_BASE}/torrents/${infoHash}/download-zip" class="action-download-zip" download title="Download as ZIP">📦 ZIP</a>
+              <button type="button" data-action="download-zip" data-hash="${infoHash}" class="action-download-zip" title="Download as ZIP">📦 ZIP</button>
               <button type="button" data-action="remove" data-hash="${infoHash}">Remove</button>
             </div>
           </td>
@@ -309,6 +309,9 @@ async function onTableAction(event) {
           return;
         }
         await loadTorrentDetails(hash);
+        return;
+      case "download-zip":
+        await startZipDownload(hash);
         return;
       default:
         return;
@@ -443,7 +446,7 @@ function renderTorrentDetails(summary, metadataPending) {
     <div class="details-quick-actions">
       <button type="button" data-details-action="${resumeAction}" class="btn-action">${resumeLabel}</button>
       <button type="button" data-details-action="refresh" class="btn-action">Refresh</button>
-      <a href="${API_BASE}/torrents/${escapeHtml(summary.infoHash)}/download-zip" class="download-zip-btn" download>📦 Download ZIP</a>
+      <button type="button" data-details-action="download-zip" class="download-zip-btn">📦 Download ZIP</button>
       <button type="button" data-details-action="remove-data" class="btn-danger">Delete</button>
     </div>
     
@@ -508,6 +511,9 @@ async function onDetailsAction(event) {
       break;
     case "download-all":
       await submitSelection(state.detailsHash, false, []);
+      break;
+    case "download-zip":
+      await startZipDownload(state.detailsHash);
       break;
     case "apply-selection":
       await submitSelection(state.detailsHash, true, collectSelectedFileIndices());
@@ -643,6 +649,32 @@ async function apiRequest(method, url, body, options = {}) {
   }
 
   return payload;
+}
+
+async function startZipDownload(infoHash) {
+  const prepareUrl = `${API_BASE}/torrents/${infoHash}/download-zip?prepare=1`;
+  const downloadUrl = `${API_BASE}/torrents/${infoHash}/download-zip`;
+  const maxAttempts = 180;
+
+  showMessage("Preparing ZIP for resumable download...", false);
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const result = await apiRequest("GET", prepareUrl, null, { returnMeta: true });
+    if (result.status === 200 && result.payload && result.payload.status === "ready") {
+      const a = document.createElement("a");
+      a.href = (result.payload.downloadUrl || downloadUrl);
+      a.download = "";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showMessage("ZIP download started. You can pause/resume in your browser download manager.", false);
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  showMessage("ZIP preparation is taking longer than expected. Try again in a minute.", true);
 }
 
 function showMessage(message, isError) {

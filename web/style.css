@@ -298,6 +298,43 @@ body {
   font-weight: 700;
 }
 
+.resource-value-gauge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resource-gauge {
+  --percent: 0;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--primary-strong) calc(var(--percent) * 1%),
+    color-mix(in srgb, var(--surface-2) 88%, #000 12%) 0
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.resource-gauge-inner {
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resource-gauge .value {
+  font-size: 0.92rem;
+  line-height: 1;
+}
+
 .resource-value .detail,
 .metric {
   color: var(--muted);
@@ -726,6 +763,23 @@ body {
   color: #2d0f0f;
 }
 
+.app-footer {
+  padding: 14px 24px 22px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.app-footer a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.app-footer a:hover {
+  text-decoration: underline;
+}
+
 .zip-progress-wrap {
   max-width: 560px;
   margin: 0 auto;
@@ -787,6 +841,10 @@ body {
   .details-meta,
   .cleanup-summary {
     grid-template-columns: 1fr;
+  }
+
+  .resource-value-gauge {
+    justify-content: flex-start;
   }
 
   .torrents-table th:nth-child(4),

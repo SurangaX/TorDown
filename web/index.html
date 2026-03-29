@@ -103,24 +103,36 @@
       <div class="resources-grid">
         <div class="resource-item">
           <div class="resource-label">CPU</div>
-          <div class="resource-value">
-            <span id="cpu-value" class="value">0%</span>
+          <div class="resource-value resource-value-gauge">
+            <div id="cpu-gauge" class="resource-gauge" style="--percent: 0;">
+              <div class="resource-gauge-inner">
+                <span id="cpu-value" class="value">0%</span>
+              </div>
+            </div>
             <span id="cpu-cores" class="detail">0 cores</span>
           </div>
         </div>
         
         <div class="resource-item">
           <div class="resource-label">Memory</div>
-          <div class="resource-value">
-            <span id="ram-value" class="value">0%</span>
+          <div class="resource-value resource-value-gauge">
+            <div id="ram-gauge" class="resource-gauge" style="--percent: 0;">
+              <div class="resource-gauge-inner">
+                <span id="ram-value" class="value">0%</span>
+              </div>
+            </div>
             <span id="ram-detail" class="detail">0 / 0 GB</span>
           </div>
         </div>
         
         <div class="resource-item">
           <div class="resource-label">Storage</div>
-          <div class="resource-value">
-            <span id="disk-value" class="value">0%</span>
+          <div class="resource-value resource-value-gauge">
+            <div id="disk-gauge" class="resource-gauge" style="--percent: 0;">
+              <div class="resource-gauge-inner">
+                <span id="disk-value" class="value">0%</span>
+              </div>
+            </div>
             <span id="disk-detail" class="detail">0 / 0 GB</span>
           </div>
         </div>
@@ -166,6 +178,13 @@
       </div>
     </section>
   </main>
+
+  <footer class="app-footer">
+    <p>
+      Created by <a href="https://github.com/SurangaX" target="_blank" rel="noopener noreferrer">SurangaX</a> 2026.
+      Educational purpose only.
+    </p>
+  </footer>
 
   <!-- Torrent Details Modal -->
   <div id="details-modal" class="modal" hidden>

@@ -1014,18 +1014,27 @@ function renderStats(stats) {
 function renderSystemResources(system) {
   if (!system) return;
 
+  const setGauge = (gaugeId, percent) => {
+    const gauge = document.getElementById(gaugeId);
+    if (gauge) {
+      gauge.style.setProperty('--percent', percent.toFixed(1));
+    }
+  };
+
   // CPU
   const cpuPercent = Math.min(Math.max(system.cpu?.usagePercent || 0, 0), 100);
   const cpuValue = document.getElementById('cpu-value');
   const cpuCores = document.getElementById('cpu-cores');
   if (cpuValue) cpuValue.textContent = `${cpuPercent.toFixed(1)}%`;
   if (cpuCores) cpuCores.textContent = `${system.cpu?.cores || 0} cores`;
+  setGauge('cpu-gauge', cpuPercent);
 
   // RAM
   const ramPercent = Math.min(Math.max(system.memory?.usagePercent || 0, 0), 100);
   const ramValue = document.getElementById('ram-value');
   const ramDetail = document.getElementById('ram-detail');
   if (ramValue) ramValue.textContent = `${ramPercent.toFixed(1)}%`;
+  setGauge('ram-gauge', ramPercent);
   if (ramDetail) {
     const usedGB = (system.memory?.used || 0) / (1024 ** 3);
     const totalGB = (system.memory?.total || 0) / (1024 ** 3);
@@ -1037,6 +1046,7 @@ function renderSystemResources(system) {
   const diskValue = document.getElementById('disk-value');
   const diskDetail = document.getElementById('disk-detail');
   if (diskValue) diskValue.textContent = `${diskPercent.toFixed(1)}%`;
+  setGauge('disk-gauge', diskPercent);
   if (diskDetail) {
     const downloadGB = (system.disk?.downloadDirUsed || 0) / (1024 ** 3);
     const usedGB = (system.disk?.used || 0) / (1024 ** 3);

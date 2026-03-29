@@ -73,7 +73,7 @@ func main() {
 		// Determine HTTPS port for redirect
 		httpsHost := addr
 		if !strings.HasPrefix(httpsHost, ":") {
-			if host, port, err := net.SplitHostPort(httpsHost); err == nil {
+			if _, port, err := net.SplitHostPort(httpsHost); err == nil {
 				httpsHost = ":" + port
 			}
 		}

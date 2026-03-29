@@ -10,132 +10,166 @@
   <!-- Notification Bar -->
   <div id="notification-bar" class="notification-bar" role="status" aria-live="polite"></div>
 
-  <header class="app-header">
-    <h1>TorDown</h1>
-    <p class="subtitle">Minimal torrent management UI</p>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-container">
+      <div class="header-brand">
+        <h1>⬇ TorDown</h1>
+      </div>
+      <div class="header-actions">
+        <button id="refresh-btn" class="btn-icon" title="Refresh">🔄</button>
+        <button id="clear-data-btn" class="btn-icon btn-danger" title="Cleanup">🗑️</button>
+      </div>
+    </div>
   </header>
 
-  <main class="content">
-    <section class="card">
-      <h2>Add Torrent</h2>
-      <form id="add-torrent-form" class="form-grid">
-        <label>
-          Magnet URI
-          <input type="url" id="magnet-uri" name="magnet" placeholder="magnet:?xt=..." autocomplete="off">
-        </label>
-        <label>
-          Torrent URL
-          <input type="url" id="torrent-url" name="torrentUrl" placeholder="https://example.com/file.torrent" autocomplete="off">
-        </label>
-        <label>
-          Torrent File
-          <input type="file" id="torrent-file" accept=".torrent">
-        </label>
-        <button type="submit">Add Torrent</button>
-        <p class="hint" id="source-hint">Provide exactly one source: magnet link, torrent URL, or upload a .torrent file.</p>
+  <main class="main">
+    <!-- Quick Add Section -->
+    <section class="section add-section">
+      <form id="add-torrent-form" class="add-form">
+        <div class="form-group">
+          <input 
+            type="url" 
+            id="magnet-uri" 
+            class="form-input" 
+            placeholder="Magnet link, torrent URL or upload file..."
+            autocomplete="off"
+          >
+          <input 
+            type="file" 
+            id="torrent-file" 
+            accept=".torrent"
+            class="form-input-file"
+          >
+          <input 
+            type="url" 
+            id="torrent-url" 
+            class="form-input-hidden" 
+            placeholder="Torrent URL"
+            autocomplete="off"
+            style="display:none"
+          >
+          <button type="submit" class="btn-primary">Add</button>
+        </div>
+        <p class="form-hint" id="source-hint"></p>
       </form>
     </section>
 
-    <div class="stats-container">
-      <section class="card stats-card" aria-live="polite">
-        <h2>Session Overview</h2>
-        <div class="stats-grid">
-          <article class="stats-tile">
-            <span class="tile-label">Torrents</span>
-            <span class="tile-value" id="stat-torrents">0</span>
-          </article>
-          <article class="stats-tile">
-            <span class="tile-label">Active Peers</span>
-            <span class="tile-value" id="stat-peers">0</span>
-          </article>
-          <article class="stats-tile">
-            <span class="tile-label">Downloaded</span>
-            <span class="tile-value" id="stat-downloaded">0 B</span>
-          </article>
-          <article class="stats-tile">
-            <span class="tile-label">Uploaded</span>
-            <span class="tile-value" id="stat-uploaded">0 B</span>
-          </article>
+    <!-- Stats Overview -->
+    <section class="section stats-section">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">📦</div>
+          <div class="stat-content">
+            <div class="stat-value" id="stat-torrents">0</div>
+            <div class="stat-label">Torrents</div>
+          </div>
         </div>
-      </section>
-
-      <section class="card system-card" aria-live="polite">
-        <h2>Server Resources</h2>
-        <div class="system-grid">
-          <article class="system-tile">
-            <span class="system-icon">💻</span>
-            <span class="system-value" id="cpu-value">0%</span>
-            <span class="system-label">CPU</span>
-            <span class="system-detail" id="cpu-cores">0 cores</span>
-          </article>
-          
-          <article class="system-tile">
-            <span class="system-icon">🧠</span>
-            <span class="system-value" id="ram-value">0%</span>
-            <span class="system-label">RAM</span>
-            <span class="system-detail" id="ram-detail">0 / 0 GB</span>
-          </article>
-          
-          <article class="system-tile">
-            <span class="system-icon">💾</span>
-            <span class="system-value" id="disk-value">0%</span>
-            <span class="system-label">Storage</span>
-            <span class="system-detail" id="disk-detail">0 / 0 GB</span>
-          </article>
-          
-          <article class="system-tile">
-            <span class="system-icon">🌐</span>
-            <span class="system-label">Network</span>
-            <div class="network-speeds">
-              <div class="speed-item">
-                <span class="speed-label">↓</span>
-                <span class="speed-value" id="net-down">0 B/s</span>
-              </div>
-              <div class="speed-item">
-                <span class="speed-label">↑</span>
-                <span class="speed-value" id="net-up">0 B/s</span>
-              </div>
-            </div>
-          </article>
+        
+        <div class="stat-card">
+          <div class="stat-icon">👥</div>
+          <div class="stat-content">
+            <div class="stat-value" id="stat-peers">0</div>
+            <div class="stat-label">Peers</div>
+          </div>
         </div>
-      </section>
-    </div>
-
-    <section class="card">
-      <div class="card-header">
-        <h2>Torrents</h2>
-        <div class="card-header-actions">
-          <button id="clear-data-btn" type="button" class="btn-danger">Clear Data</button>
-          <button id="refresh-btn" type="button">Refresh</button>
+        
+        <div class="stat-card">
+          <div class="stat-icon">⬇️</div>
+          <div class="stat-content">
+            <div class="stat-value" id="stat-downloaded">0 B</div>
+            <div class="stat-label">Downloaded</div>
+          </div>
+        </div>
+        
+        <div class="stat-card">
+          <div class="stat-icon">⬆️</div>
+          <div class="stat-content">
+            <div class="stat-value" id="stat-uploaded">0 B</div>
+            <div class="stat-label">Uploaded</div>
+          </div>
         </div>
       </div>
-      <div class="table-wrapper">
-        <table id="torrent-table">
+    </section>
+
+    <!-- System Resources -->
+    <section class="section resources-section">
+      <div class="resources-header">
+        <h2>System</h2>
+      </div>
+      <div class="resources-grid">
+        <div class="resource-item">
+          <div class="resource-label">CPU</div>
+          <div class="resource-value">
+            <span id="cpu-value" class="value">0%</span>
+            <span id="cpu-cores" class="detail">0 cores</span>
+          </div>
+        </div>
+        
+        <div class="resource-item">
+          <div class="resource-label">Memory</div>
+          <div class="resource-value">
+            <span id="ram-value" class="value">0%</span>
+            <span id="ram-detail" class="detail">0 / 0 GB</span>
+          </div>
+        </div>
+        
+        <div class="resource-item">
+          <div class="resource-label">Storage</div>
+          <div class="resource-value">
+            <span id="disk-value" class="value">0%</span>
+            <span id="disk-detail" class="detail">0 / 0 GB</span>
+          </div>
+        </div>
+        
+        <div class="resource-item">
+          <div class="resource-label">Network</div>
+          <div class="resource-value">
+            <div class="network-metrics">
+              <span class="metric">↓ <span id="net-down">0 B/s</span></span>
+              <span class="metric">↑ <span id="net-up">0 B/s</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Torrents List -->
+    <section class="section torrents-section">
+      <div class="torrents-header">
+        <h2>Downloads</h2>
+        <span class="torrent-count" id="torrent-count">0 torrents</span>
+      </div>
+      <div class="torrents-container">
+        <table id="torrent-table" class="torrents-table">
           <thead>
             <tr>
               <th>Name</th>
-              <th>Status</th>
               <th>Progress</th>
-              <th>Speeds</th>
+              <th>Speed</th>
               <th>ETA</th>
               <th>Peers</th>
               <th>Data</th>
-              <th>Actions</th>
+              <th></th>
             </tr>
           </thead>
-          <tbody>
-          </tbody>
+          <tbody></tbody>
         </table>
+        <div class="torrents-empty" id="torrents-empty" hidden>
+          <div class="empty-icon">📋</div>
+          <p>No torrents yet. Add one to get started!</p>
+        </div>
       </div>
     </section>
   </main>
 
   <!-- Torrent Details Modal -->
   <div id="details-modal" class="modal" hidden>
-    <div class="modal-content modal-details">
+    <div class="modal-overlay" onclick="closeDetailsPanel()"></div>
+    <div class="modal-content">
       <div class="modal-header">
-        <h3 id="details-modal-title">Torrent Details</h3>
-        <button type="button" id="close-details" class="close-modal">✕</button>
+        <h2 id="details-modal-title">Torrent Details</h2>
+        <button type="button" class="btn-close" id="close-details">✕</button>
       </div>
       <div class="modal-body">
         <div id="details-content"></div>
@@ -145,15 +179,15 @@
 
   <!-- Media Player Modal -->
   <div id="media-player-modal" class="modal" hidden>
-    <div class="modal-content">
+    <div class="modal-overlay" onclick="closeMediaPlayer()"></div>
+    <div class="modal-content modal-fullwidth">
       <div class="modal-header">
-        <h3 id="media-title">Media Player</h3>
-        <button type="button" id="close-player" class="close-modal">✕</button>
+        <h2 id="media-title">Media Player</h2>
+        <button type="button" class="btn-close" id="close-player">✕</button>
       </div>
       <div class="modal-body">
         <video id="media-player" controls autoplay>
           <source id="media-source" src="" type="video/mp4">
-          Your browser does not support the video tag.
         </video>
       </div>
     </div>
@@ -161,76 +195,78 @@
 
   <!-- File Selection Modal -->
   <div id="file-selection-modal" class="modal" hidden>
-    <div class="modal-content modal-large">
+    <div class="modal-overlay" onclick="closeFileSelectionModal()"></div>
+    <div class="modal-content">
       <div class="modal-header">
-        <h3 id="selection-title">Select Files to Download</h3>
-        <button type="button" id="close-selection" class="close-modal">✕</button>
+        <h2 id="selection-title">Select Files</h2>
+        <button type="button" class="btn-close" id="close-selection">✕</button>
       </div>
       <div class="modal-body">
-        <p class="selection-info">Choose which files you want to download. Unselected files will be skipped.</p>
-        <div class="selection-actions-row">
-          <div class="selection-actions-left">
-            <button type="button" id="select-all-files">Select All</button>
-            <button type="button" id="select-none-files">Select None</button>
-          </div>
-          <div class="selection-actions-right">
-            <button type="button" id="start-download-selected" class="btn-primary">Start Download</button>
-            <button type="button" id="start-download-all" class="btn-secondary">Download All Files</button>
-          </div>
+        <div class="selection-toolbar">
+          <button type="button" class="btn-secondary" id="select-all-files">Select All</button>
+          <button type="button" class="btn-secondary" id="select-none-files">Select None</button>
         </div>
         <div id="selection-files-list" class="selection-files"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="close-selection-btn">Cancel</button>
+          <button type="button" class="btn-primary" id="start-download-selected">Download Selected</button>
+          <button type="button" class="btn-primary" id="start-download-all">Download All</button>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Cleanup Modal -->
   <div id="cleanup-modal" class="modal" hidden>
+    <div class="modal-overlay" onclick="closeCleanupModal()"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3>Cleanup Disk Space</h3>
-        <button type="button" id="close-cleanup" class="close-modal">✕</button>
+        <h2>Cleanup Storage</h2>
+        <button type="button" class="btn-close" id="close-cleanup">✕</button>
       </div>
       <div class="modal-body">
-        <div id="cleanup-cache-stats" class="cleanup-stats">
-          <div class="cleanup-stat-item">
-            <span class="stat-label">ZIP Cache</span>
-            <span class="stat-value" id="cleanup-zip-cache-size">--</span>
+        <div class="cleanup-summary">
+          <div class="summary-item">
+            <span class="summary-label">ZIP Cache:</span>
+            <span class="summary-value" id="cleanup-zip-cache-size">--</span>
           </div>
-          <div class="cleanup-stat-item">
-            <span class="stat-label">Other Cache</span>
-            <span class="stat-value" id="cleanup-other-cache-size">--</span>
+          <div class="summary-item">
+            <span class="summary-label">Temp Files:</span>
+            <span class="summary-value" id="cleanup-other-cache-size">--</span>
           </div>
         </div>
-        <div class="cleanup-options">
-          <label>
+
+        <div class="cleanup-modes">
+          <label class="cleanup-mode">
             <input type="radio" name="cleanup-mode" value="orphan" checked>
-            <span class="option-title">Clean Orphan Data</span>
-            <span class="option-desc">Remove files not associated with active torrents</span>
+            <span class="mode-label">Orphan Data</span>
+            <span class="mode-desc">Remove unused files</span>
           </label>
-          <label>
+          <label class="cleanup-mode">
             <input type="radio" name="cleanup-mode" value="zips">
-            <span class="option-title">Clean ZIP Files</span>
-            <span class="option-desc">Remove temporary ZIP archives older than 30 minutes</span>
+            <span class="mode-label">ZIP Files</span>
+            <span class="mode-desc">Remove old archives</span>
           </label>
-          <label>
+          <label class="cleanup-mode">
             <input type="radio" name="cleanup-mode" value="all">
-            <span class="option-title">Clean Everything</span>
-            <span class="option-desc">Remove all orphan data and temporary files</span>
+            <span class="mode-label">Everything</span>
+            <span class="mode-desc">Deep clean</span>
           </label>
         </div>
+
         <div id="cleanup-progress" class="cleanup-progress" hidden>
-          <p>Cleaning up disk space...</p>
-          <div class="progress-bar">
-            <div class="progress-fill"></div>
-          </div>
+          <p>Cleaning...</p>
+          <div class="progress-bar"><div class="progress-fill"></div></div>
         </div>
+
         <div id="cleanup-result" class="cleanup-result" hidden>
           <div id="cleanup-result-message" class="result-message"></div>
           <div id="cleanup-result-details" class="result-details"></div>
         </div>
-        <div class="cleanup-actions">
-          <button type="button" id="cleanup-cancel-btn" class="btn-secondary">Cancel</button>
-          <button type="button" id="cleanup-execute-btn" class="btn-primary">Cleanup Now</button>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="cleanup-cancel-btn">Cancel</button>
+          <button type="button" class="btn-primary" id="cleanup-execute-btn">Cleanup</button>
         </div>
       </div>
     </div>

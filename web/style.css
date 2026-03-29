@@ -214,6 +214,16 @@ body {
   justify-content: center;
 }
 
+.btn-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .btn-icon.btn-danger,
 .actions button[data-action="remove"],
 .details-quick-actions .btn-danger,

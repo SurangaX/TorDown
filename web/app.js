@@ -25,8 +25,11 @@ function toggleTheme() {
 function updateThemeButton(theme) {
   const btn = document.getElementById('theme-toggle-btn');
   if (btn) {
-    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    const sunIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path></svg>';
+    const moonIcon = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M21 12.79A9 9 0 1 1 11.21 3c.17 0 .34.01.5.03A7 7 0 1 0 20.97 12c.02.26.03.53.03.79z"></path></svg>';
+    btn.innerHTML = theme === 'dark' ? sunIcon : moonIcon;
     btn.title = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+    btn.setAttribute('aria-label', btn.title);
   }
 }
 

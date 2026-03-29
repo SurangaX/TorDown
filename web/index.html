@@ -36,6 +36,7 @@
             placeholder="Magnet link, torrent URL or upload file..."
             autocomplete="off"
           >
+          <label for="torrent-file" id="upload-trigger" class="btn-secondary upload-trigger">Upload .torrent</label>
           <input 
             type="file" 
             id="torrent-file" 
@@ -52,6 +53,7 @@
           >
           <button type="submit" class="btn-primary">Add</button>
         </div>
+        <p id="selected-file-name" class="selected-file-name"></p>
         <p class="form-hint" id="source-hint"></p>
       </form>
     </section>

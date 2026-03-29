@@ -52,6 +52,8 @@ document.addEventListener("DOMContentLoaded", () => {
   elements.magnetInput = document.getElementById("magnet-uri");
   elements.torrentUrlInput = document.getElementById("torrent-url");
   elements.fileInput = document.getElementById("torrent-file");
+  elements.uploadTrigger = document.getElementById("upload-trigger");
+  elements.selectedFileName = document.getElementById("selected-file-name");
   elements.detailsModal = document.getElementById("details-modal");
   elements.detailsModalTitle = document.getElementById("details-modal-title");
   elements.detailsContent = document.getElementById("details-content");
@@ -270,7 +272,7 @@ async function onAddTorrentSubmit(event) {
     return;
   }
   if (providedSources > 1) {
-    showMessage("Provide exactly one source: magnet link, torrent URL, or upload file.", true);
+    showMessage("Provide exactly one source: magnet link, torrent URL, or upload a .torrent file.", true);
     return;
   }
 
@@ -968,6 +970,16 @@ function syncSourceInputs() {
   elements.magnetInput.disabled = disableMagnet;
   elements.torrentUrlInput.disabled = disableUrl;
   elements.fileInput.disabled = disableFile;
+
+  if (elements.uploadTrigger) {
+    elements.uploadTrigger.classList.toggle("disabled", disableFile);
+  }
+
+  if (elements.selectedFileName) {
+    elements.selectedFileName.textContent = fileFilled
+      ? `Selected file: ${elements.fileInput.files[0].name}`
+      : "";
+  }
 }
 
 function resetSourceInputs() {
@@ -975,6 +987,9 @@ function resetSourceInputs() {
   elements.torrentUrlInput.disabled = false;
   elements.fileInput.disabled = false;
   elements.fileInput.value = "";
+  if (elements.selectedFileName) {
+    elements.selectedFileName.textContent = "";
+  }
   elements.sourceHint.textContent = "Provide exactly one source: magnet link, torrent URL, or upload a .torrent file.";
   elements.sourceHint.classList.remove("error");
   syncSourceInputs();

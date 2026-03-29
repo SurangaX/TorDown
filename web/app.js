@@ -872,7 +872,7 @@ function renderSystemResources(system) {
   }
 
   // Disk
-  const diskPercent = Math.min(Math.max(system.disk?.downloadDirUsagePercent || 0, 0), 100);
+  const diskPercent = Math.min(Math.max(system.disk?.usagePercent || 0, 0), 100);
   const diskValue = document.getElementById('disk-value');
   const diskDetail = document.getElementById('disk-detail');
   if (diskValue) diskValue.textContent = `${diskPercent.toFixed(1)}%`;
@@ -880,7 +880,8 @@ function renderSystemResources(system) {
     const downloadGB = (system.disk?.downloadDirUsed || 0) / (1024 ** 3);
     const usedGB = (system.disk?.used || 0) / (1024 ** 3);
     const totalGB = (system.disk?.total || 0) / (1024 ** 3);
-    diskDetail.textContent = `${downloadGB.toFixed(1)} GB downloads | ${usedGB.toFixed(1)} / ${totalGB.toFixed(1)} GB disk`;
+    const freeGB = (system.disk?.free || 0) / (1024 ** 3);
+    diskDetail.textContent = `${downloadGB.toFixed(1)}GB used | ${usedGB.toFixed(1)} / ${totalGB.toFixed(1)} GB partition | ${freeGB.toFixed(1)} GB free`;
   }
 
   // Network

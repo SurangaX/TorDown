@@ -148,6 +148,8 @@ func calculateDirectorySize(root string) (uint64, error) {
 	}
 
 	var total uint64
+	blockSize := int64(4096) // default block size on most Linux systems
+
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			if os.IsNotExist(walkErr) {
@@ -155,20 +157,24 @@ func calculateDirectorySize(root string) (uint64, error) {
 			}
 			return walkErr
 		}
-		if d.IsDir() {
-			return nil
-		}
 
 		info, err := d.Info()
 		if err != nil {
-			if os.IsNotExist(err) {
+			if os.IsNotExist(walkErr) {
 				return nil
 			}
 			return err
 		}
-		if info.Size() > 0 {
-			total += uint64(info.Size())
+
+		// Count all files and directories (directories also take space)
+		if info.IsDir() {
+			total += uint64(blockSize) // account for directory entry
+		} else if size := info.Size(); size > 0 {
+			// Calculate actual blocks used (rounds up to nearest block)
+			blocks := (size + blockSize - 1) / blockSize
+			total += uint64(blocks) * uint64(blockSize)
 		}
+
 		return nil
 	})
 

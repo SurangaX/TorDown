@@ -16,7 +16,7 @@ This guide will help you set up HTTPS/SSL for your TorDown server using Let's En
    chmod +x setup-ssl.sh
    ```
 
-2. **Run the SSL setup script:**
+2. **Run the SSL setup script (standalone challenge):**
    ```bash
    sudo ./setup-ssl.sh your-subdomain.duckdns.org your-email@example.com
    ```
@@ -24,6 +24,15 @@ This guide will help you set up HTTPS/SSL for your TorDown server using Let's En
    Example:
    ```bash
    sudo ./setup-ssl.sh myserver.duckdns.org admin@gmail.com
+   ```
+
+   Optional flags:
+   ```bash
+   # Use Let's Encrypt staging (test mode)
+   sudo ./setup-ssl.sh myserver.duckdns.org admin@gmail.com --staging
+
+   # Use webroot challenge if another web server owns port 80
+   sudo ./setup-ssl.sh myserver.duckdns.org admin@gmail.com --challenge webroot --webroot-path /var/www/html
    ```
 
 3. **Rebuild TorDown with SSL support:**
@@ -61,7 +70,7 @@ sudo apt-get install -y certbot
 pkill tordown
 ```
 
-### 3. Obtain SSL Certificate
+### 3. Obtain SSL Certificate (ACME via certbot)
 ```bash
 sudo certbot certonly --standalone \
   --preferred-challenges http \
@@ -112,7 +121,7 @@ sudo systemctl disable tordown
 
 ## Certificate Renewal
 
-Let's Encrypt certificates expire after 90 days. The setup script configures automatic renewal via cron job.
+Let's Encrypt certificates expire after 90 days. The setup script configures automatic renewal via `certbot.timer` (or cron fallback) and installs a deploy hook that restarts `tordown` after successful renewal.
 
 ### Manual Renewal Test
 ```bash

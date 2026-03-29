@@ -6,6 +6,7 @@ import (
     "encoding/base64"
     "encoding/json"
     "errors"
+    "fmt"
     "io"
     "net/http"
     "os"
@@ -93,6 +94,7 @@ func (s *httpServer) mountAPI(r chi.Router) {
     r.Get("/health", s.handleHealth)
     r.Get("/stats", s.handleStats)
     r.Get("/system", s.handleSystemResources)
+    r.Get("/cache/stats", s.handleCacheStats)
     r.Post("/data/cleanup", s.handleCleanupData)
     r.Get("/torrents", s.handleListTorrents)
     r.Post("/torrents", s.handleAddTorrent)
@@ -111,26 +113,95 @@ func (s *httpServer) mountAPI(r chi.Router) {
 }
 
 func (s *httpServer) handleCleanupData(w http.ResponseWriter, r *http.Request) {
-    result, err := s.manager.CleanupOrphanData()
-    if err != nil {
-        respondErrorWithStatus(w, err, http.StatusInternalServerError)
-        return
+    cleanupMode := strings.TrimSpace(r.URL.Query().Get("mode"))
+    if cleanupMode == "" {
+        cleanupMode = "all"
     }
 
-    // Force-clean all temp ZIP artifacts when user explicitly clicks Clear Data.
-    zipRemoved, zipErr := cleanupTemporaryZipArchives(0)
-    if zipErr != nil {
-        respondErrorWithStatus(w, zipErr, http.StatusInternalServerError)
-        return
+    var orphanResult torrent.CleanupResult
+    var zipRemoved []string
+    var zipErr error
+
+    orphanRemoved := int64(0)
+    orphanCount := 0
+    zipCount := 0
+
+    // Clean up orphan data if requested
+    if cleanupMode == "all" || cleanupMode == "orphan" {
+        result, err := s.manager.CleanupOrphanData()
+        if err != nil {
+            respondErrorWithStatus(w, err, http.StatusInternalServerError)
+            return
+        }
+        orphanResult = result
+        orphanCount = len(result.Removed)
+        orphanRemoved = int64(orphanCount)
+    }
+
+    // Clean up ZIP cache if requested
+    if cleanupMode == "all" || cleanupMode == "zips" {
+        var maxAge time.Duration
+        if cleanupMode == "all" {
+            maxAge = 0 // Force-clean all
+        } else {
+            maxAge = 30 * time.Minute // Only clean zips older than 30 min
+        }
+        zipRemoved, zipErr = cleanupTemporaryZipArchives(maxAge)
+        if zipErr != nil && cleanupMode == "all" {
+            respondErrorWithStatus(w, zipErr, http.StatusInternalServerError)
+            return
+        }
+        zipCount = len(zipRemoved)
+    }
+
+    sizeFreed := int64(0)
+    for _, path := range zipRemoved {
+        if stat, err := os.Stat(path); err == nil {
+            sizeFreed += stat.Size()
+        }
     }
 
     respondJSON(w, http.StatusOK, map[string]interface{}{
-        "removed":            result.Removed,
-        "removedCount":       result.RemovedCount,
-        "tempZipRemoved":     zipRemoved,
-        "tempZipRemovedCount": len(zipRemoved),
-        "totalRemovedCount":  result.RemovedCount + len(zipRemoved),
+        "mode":                cleanupMode,
+        "orphanRemoved":       orphanResult.Removed,
+        "orphanCount":         orphanCount,
+        "tempZipRemoved":      zipRemoved,
+        "tempZipCount":        zipCount,
+        "totalRemovedCount":   orphanCount + zipCount,
+        "sizeFreedBytes":      sizeFreed,
+        "message":             buildCleanupMessage(orphanCount, zipCount, sizeFreed),
     })
+}
+
+func buildCleanupMessage(orphanCount, zipCount int, sizeFreed int64) string {
+    var parts []string
+    if orphanCount > 0 {
+        parts = append(parts, fmt.Sprintf("%d orphan item(s)", orphanCount))
+    }
+    if zipCount > 0 {
+        parts = append(parts, fmt.Sprintf("%d ZIP file(s)", zipCount))
+    }
+    if len(parts) == 0 {
+        return "No items to clean up."
+    }
+    msg := "Cleaned up " + strings.Join(parts, " and ") + "."
+    if sizeFreed > 0 {
+        msg += fmt.Sprintf(" Freed: %s", formatBytes(sizeFreed))
+    }
+    return msg
+}
+
+func formatBytes(bytes int64) string {
+    const unit = 1024
+    if bytes < unit {
+        return fmt.Sprintf("%d B", bytes)
+    }
+    div, exp := int64(unit), 0
+    for n := bytes / unit; n >= unit; n /= unit {
+        div *= unit
+        exp++
+    }
+    return fmt.Sprintf("%.2f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func (s *httpServer) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -154,6 +225,58 @@ func (s *httpServer) handleSystemResources(w http.ResponseWriter, r *http.Reques
     }
     
     respondJSON(w, http.StatusOK, resources)
+}
+
+func (s *httpServer) handleCacheStats(w http.ResponseWriter, r *http.Request) {
+    tmpDir := os.TempDir()
+    zipCacheDir := filepath.Join(tmpDir, "tordown-zip-cache")
+    
+    zipCacheSize := int64(0)
+    zipCacheCount := 0
+    otherCacheSize := int64(0)
+    otherCacheCount := 0
+    
+    // Scan ZIP cache directory
+    if entries, err := os.ReadDir(zipCacheDir); err == nil {
+        for _, entry := range entries {
+            if !entry.IsDir() {
+                if fileInfo, err := entry.Info(); err == nil {
+                    zipCacheSize += fileInfo.Size()
+                    zipCacheCount++
+                }
+            }
+        }
+    }
+    
+    // Scan root tmp directory for tordown-*.zip files
+    if entries, err := os.ReadDir(tmpDir); err == nil {
+        for _, entry := range entries {
+            if !entry.IsDir() {
+                name := entry.Name()
+                if strings.HasPrefix(name, "tordown-") && strings.HasSuffix(name, ".zip") {
+                    if fileInfo, err := entry.Info(); err == nil {
+                        otherCacheSize += fileInfo.Size()
+                        otherCacheCount++
+                    }
+                }
+            }
+        }
+    }
+    
+    respondJSON(w, http.StatusOK, map[string]interface{}{
+        "zipCache": map[string]interface{}{
+            "size":  zipCacheSize,
+            "count": zipCacheCount,
+            "path":  zipCacheDir,
+        },
+        "otherCache": map[string]interface{}{
+            "size":  otherCacheSize,
+            "count": otherCacheCount,
+            "path":  tmpDir,
+        },
+        "totalCacheSize": zipCacheSize + otherCacheSize,
+        "totalCacheCount": zipCacheCount + otherCacheCount,
+    })
 }
 
 func (s *httpServer) handleListTorrents(w http.ResponseWriter, r *http.Request) {

@@ -183,6 +183,59 @@
     </div>
   </div>
 
+  <!-- Cleanup Modal -->
+  <div id="cleanup-modal" class="modal" hidden>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Cleanup Disk Space</h3>
+        <button type="button" id="close-cleanup" class="close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="cleanup-cache-stats" class="cleanup-stats">
+          <div class="cleanup-stat-item">
+            <span class="stat-label">ZIP Cache</span>
+            <span class="stat-value" id="cleanup-zip-cache-size">--</span>
+          </div>
+          <div class="cleanup-stat-item">
+            <span class="stat-label">Other Cache</span>
+            <span class="stat-value" id="cleanup-other-cache-size">--</span>
+          </div>
+        </div>
+        <div class="cleanup-options">
+          <label>
+            <input type="radio" name="cleanup-mode" value="orphan" checked>
+            <span class="option-title">Clean Orphan Data</span>
+            <span class="option-desc">Remove files not associated with active torrents</span>
+          </label>
+          <label>
+            <input type="radio" name="cleanup-mode" value="zips">
+            <span class="option-title">Clean ZIP Files</span>
+            <span class="option-desc">Remove temporary ZIP archives older than 30 minutes</span>
+          </label>
+          <label>
+            <input type="radio" name="cleanup-mode" value="all">
+            <span class="option-title">Clean Everything</span>
+            <span class="option-desc">Remove all orphan data and temporary files</span>
+          </label>
+        </div>
+        <div id="cleanup-progress" class="cleanup-progress" hidden>
+          <p>Cleaning up disk space...</p>
+          <div class="progress-bar">
+            <div class="progress-fill"></div>
+          </div>
+        </div>
+        <div id="cleanup-result" class="cleanup-result" hidden>
+          <div id="cleanup-result-message" class="result-message"></div>
+          <div id="cleanup-result-details" class="result-details"></div>
+        </div>
+        <div class="cleanup-actions">
+          <button type="button" id="cleanup-cancel-btn" class="btn-secondary">Cancel</button>
+          <button type="button" id="cleanup-execute-btn" class="btn-primary">Cleanup Now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="/app.js" defer></script>
 </body>
 </html>

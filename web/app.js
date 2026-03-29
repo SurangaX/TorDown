@@ -43,11 +43,22 @@ document.addEventListener("DOMContentLoaded", () => {
   elements.selectNoneFiles = document.getElementById("select-none-files");
   elements.startDownloadSelected = document.getElementById("start-download-selected");
   elements.startDownloadAll = document.getElementById("start-download-all");
+  
+  // Cleanup modal elements
+  elements.cleanupModal = document.getElementById("cleanup-modal");
+  elements.closeCleanup = document.getElementById("close-cleanup");
+  elements.cleanupCancelBtn = document.getElementById("cleanup-cancel-btn");
+  elements.cleanupExecuteBtn = document.getElementById("cleanup-execute-btn");
+  elements.cleanupCacheStats = document.getElementById("cleanup-cache-stats");
+  elements.cleanupProgress = document.getElementById("cleanup-progress");
+  elements.cleanupResult = document.getElementById("cleanup-result");
+  elements.cleanupResultMessage = document.getElementById("cleanup-result-message");
+  elements.cleanupResultDetails = document.getElementById("cleanup-result-details");
 
   elements.form.addEventListener("submit", onAddTorrentSubmit);
   elements.refreshBtn.addEventListener("click", () => refreshTorrents());
   if (elements.clearDataBtn) {
-    elements.clearDataBtn.addEventListener("click", onClearDataClick);
+    elements.clearDataBtn.addEventListener("click", openCleanupModal);
   }
   elements.tableBody.addEventListener("click", onTableAction);
   elements.closeDetails.addEventListener("click", closeDetailsPanel);
@@ -63,6 +74,17 @@ document.addEventListener("DOMContentLoaded", () => {
   elements.selectNoneFiles.addEventListener("click", () => toggleAllFileCheckboxes(false));
   elements.startDownloadSelected.addEventListener("click", confirmFileSelection);
   elements.startDownloadAll.addEventListener("click", downloadAllFiles);
+  
+  // Cleanup modal listeners
+  elements.closeCleanup.addEventListener("click", closeCleanupModal);
+  elements.cleanupModal.addEventListener("click", (event) => {
+    if (event.target === elements.cleanupModal) {
+      closeCleanupModal();
+    }
+  });
+  elements.cleanupCancelBtn.addEventListener("click", closeCleanupModal);
+  elements.cleanupExecuteBtn.addEventListener("click", executeCleanup);
+  
   elements.magnetInput.addEventListener("input", syncSourceInputs);
   elements.torrentUrlInput.addEventListener("input", syncSourceInputs);
   elements.fileInput.addEventListener("change", syncSourceInputs);
@@ -83,6 +105,99 @@ function onVisibilityChange() {
   } else if (!document.hidden && !state.timer) {
     refreshTorrents();
     state.timer = setInterval(refreshTorrents, POLL_INTERVAL_MS);
+  }
+}
+
+async function openCleanupModal() {
+  // Reset modal state
+  elements.cleanupProgress.hidden = true;
+  elements.cleanupResult.hidden = true;
+  elements.cleanupCancelBtn.hidden = false;
+  elements.cleanupExecuteBtn.hidden = false;
+  elements.cleanupExecuteBtn.disabled = false;
+  
+  // Fetch cache stats
+  try {
+    const stats = await apiRequest("GET", `${API_BASE}/cache/stats`);
+    const zipSize = formatBytes(stats.zipCache?.size || 0);
+    const otherSize = formatBytes(stats.otherCache?.size || 0);
+    
+    document.getElementById("cleanup-zip-cache-size").textContent = 
+      `${zipSize} (${stats.zipCache?.count || 0} files)`;
+    document.getElementById("cleanup-other-cache-size").textContent = 
+      `${otherSize} (${stats.otherCache?.count || 0} files)`;
+  } catch (error) {
+    console.warn("Failed to fetch cache stats:", error);
+    document.getElementById("cleanup-zip-cache-size").textContent = "Error loading";
+    document.getElementById("cleanup-other-cache-size").textContent = "Error loading";
+  }
+  
+  // Show modal
+  elements.cleanupModal.hidden = false;
+}
+
+function closeCleanupModal() {
+  elements.cleanupModal.hidden = true;
+}
+
+async function executeCleanup() {
+  const mode = document.querySelector('input[name="cleanup-mode"]:checked')?.value || "all";
+  
+  // Show progress
+  elements.cleanupProgress.hidden = false;
+  elements.cleanupResult.hidden = true;
+  elements.cleanupCancelBtn.hidden = true;
+  elements.cleanupExecuteBtn.disabled = true;
+  
+  try {
+    const result = await apiRequest("POST", `${API_BASE}/data/cleanup?mode=${mode}`, {});
+    
+    // Hide progress
+    elements.cleanupProgress.hidden = true;
+    
+    // Show result
+    elements.cleanupResult.hidden = false;
+    elements.cleanupResultMessage.textContent = result.message || "Cleanup completed";
+    
+    let detailsHTML = `
+      <div class="result-stat">
+        <span class="result-label">Orphan items removed:</span>
+        <span class="result-value">${result.orphanCount || 0}</span>
+      </div>
+      <div class="result-stat">
+        <span class="result-label">ZIP files removed:</span>
+        <span class="result-value">${result.tempZipCount || 0}</span>
+      </div>
+      <div class="result-stat">
+        <span class="result-label">Space freed:</span>
+        <span class="result-value">${formatBytes(result.sizeFreedBytes || 0)}</span>
+      </div>
+    `;
+    
+    if (result.orphanRemoved && result.orphanRemoved.length > 0) {
+      detailsHTML += `<div class="result-section"><strong>Removed items:</strong><ul>${
+        result.orphanRemoved.map(item => `<li>${escapeHtml(item)}</li>`).join('')
+      }</ul></div>`;
+    }
+    
+    elements.cleanupResultDetails.innerHTML = detailsHTML;
+    
+    showMessage(result.message || "Cleanup completed successfully", false);
+    await refreshTorrents();
+    
+  } catch (error) {
+    // Hide progress
+    elements.cleanupProgress.hidden = true;
+    
+    // Show error
+    elements.cleanupResult.hidden = false;
+    elements.cleanupResultMessage.textContent = "Cleanup failed";
+    elements.cleanupResultDetails.innerHTML = `<div class="result-error">${escapeHtml(error.message)}</div>`;
+    
+    showMessage(error.message || "Cleanup failed", true);
+  } finally {
+    elements.cleanupCancelBtn.hidden = false;
+    elements.cleanupExecuteBtn.disabled = false;
   }
 }
 

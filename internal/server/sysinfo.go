@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +43,14 @@ type DiskInfo struct {
 	UsagePercent float64 `json:"usagePercent"`
 	DownloadDirUsed uint64  `json:"downloadDirUsed"`
 	DownloadDirUsagePercent float64 `json:"downloadDirUsagePercent"`
+	CacheInfo   CacheInfo `json:"cacheInfo"`
+}
+
+type CacheInfo struct {
+	ZipCacheSize  uint64 `json:"zipCacheSize"`
+	ZipCacheCount int    `json:"zipCacheCount"`
+	OtherCacheSize uint64 `json:"otherCacheSize"`
+	OtherCacheCount int    `json:"otherCacheCount"`
 }
 
 type NetworkInfo struct {
@@ -99,6 +108,9 @@ func GetSystemResources(dataDir string) (*SystemResources, error) {
 				resources.Disk.DownloadDirUsagePercent = float64(dirSize) / float64(diskInfo.Total) * 100
 			}
 		}
+
+		// Get cache info
+		resources.Disk.CacheInfo = getCacheStats()
 	}
 
 	// Network info
@@ -213,4 +225,41 @@ func getNetworkStats() (*NetworkInfo, error) {
 	lastNetStatsTime = now
 
 	return info, nil
+}
+
+func getCacheStats() CacheInfo {
+	tmpDir := os.TempDir()
+	info := CacheInfo{}
+
+	// Check tordown-zip-cache directory
+	cacheDir := filepath.Join(tmpDir, "tordown-zip-cache")
+	if entries, err := os.ReadDir(cacheDir); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			if fileInfo, err := entry.Info(); err == nil {
+				info.ZipCacheSize += uint64(fileInfo.Size())
+				info.ZipCacheCount++
+			}
+		}
+	}
+
+	// Check root tmp directory for tordown-*.zip files
+	if entries, err := os.ReadDir(tmpDir); err == nil {
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := entry.Name()
+			if strings.HasPrefix(name, "tordown-") && strings.HasSuffix(name, ".zip") {
+				if fileInfo, err := entry.Info(); err == nil {
+					info.OtherCacheSize += uint64(fileInfo.Size())
+					info.OtherCacheCount++
+				}
+			}
+		}
+	}
+
+	return info
 }

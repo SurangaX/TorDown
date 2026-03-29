@@ -122,7 +122,6 @@ func (s *httpServer) handleCleanupData(w http.ResponseWriter, r *http.Request) {
     var zipRemoved []string
     var zipErr error
 
-    orphanRemoved := int64(0)
     orphanCount := 0
     zipCount := 0
 
@@ -135,7 +134,6 @@ func (s *httpServer) handleCleanupData(w http.ResponseWriter, r *http.Request) {
         }
         orphanResult = result
         orphanCount = len(result.Removed)
-        orphanRemoved = int64(orphanCount)
     }
 
     // Clean up ZIP cache if requested

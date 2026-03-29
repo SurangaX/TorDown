@@ -17,6 +17,34 @@
   --success: #10b981;
   --danger: #ef4444;
   --warning: #f59e0b;
+
+/* Dark mode theme */
+:root[data-theme="dark"] {
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --bg: #0f172a;
+  --bg-secondary: #1e293b;
+  --text: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --border: #334155;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+}
+
+/* Light mode theme */
+:root[data-theme="light"] {
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --bg: #ffffff;
+  --bg-secondary: #f9fafb;
+  --text: #111827;
+  --text-secondary: #6b7280;
+  --border: #e5e7eb;
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+}
 }
 
 html {
@@ -358,6 +386,110 @@ body {
 
 .torrents-table tbody tr {
   transition: background 0.15s;
+
+.torrents-table td.name {
+  font-weight: 500;
+  min-width: 200px;
+}
+
+.torrents-table td {
+  vertical-align: middle;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--primary);
+}
+
+.status-pill.downloading {
+  background: rgba(59, 130, 246, 0.1);
+  color: var(--primary);
+}
+
+.status-pill.completed {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.status-pill.paused {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+.status-pill.seeding {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.stat-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.stat-block span {
+  color: var(--text-secondary);
+}
+
+.stat-block span:first-child {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ===== Torrent Actions ===== */
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  padding: 0.5rem 0.875rem;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.actions button:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.actions button[data-action="remove"] {
+  background: var(--danger);
+}
+
+.actions button[data-action="remove"]:hover {
+  background: #dc2626;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.actions button[data-action="download-zip"] {
+  background: #8b5cf6;
+}
+
+.actions button[data-action="download-zip"]:hover {
+  background: #7c3aed;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.action-download-zip {
+  padding: 0.5rem 0.75rem !important;
+}
 }
 
 .torrents-table tbody tr:hover {
@@ -366,6 +498,20 @@ body {
 
 .torrents-table tbody tr:last-child td {
   border-bottom: none;
+
+.torrents-table tbody tr.active-row {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.torrents-table tbody tr.active-row:hover {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.torrents-table .empty {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 2rem;
+}
 }
 
 /* ===== Empty State ===== */
@@ -397,6 +543,22 @@ body {
   height: 100%;
   background: var(--primary);
   transition: width 0.3s;
+}
+.progress-bar {
+  display: block;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.25rem;
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  transition: width 0.3s ease;
+  border-radius: 3px;
 }
 
 /* ===== Modals ===== */
@@ -762,6 +924,14 @@ body {
   .torrents-table th:nth-child(5),
   .torrents-table td:nth-child(4),
   .torrents-table td:nth-child(5) {
+
+      /* Hide Speed and ETA on tablet */
+      .torrents-table th:nth-child(4),
+      .torrents-table th:nth-child(5),
+      .torrents-table td:nth-child(4),
+      .torrents-table td:nth-child(5) {
+        display: none;
+      }
     display: none;
   }
 
@@ -791,38 +961,27 @@ body {
     padding: 1rem;
   }
 
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .stat-card {
-    padding: 1rem;
-  }
-
   .resources-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .modal-content {
-    border-radius: 8px;
-  }
-
-  .modal-header,
-  .modal-body,
-  .modal-footer {
-    padding: 1.5rem 1rem;
+    max-width: 95%;
   }
 
   .modal-header h2 {
     font-size: 1.25rem;
   }
 
+  /* Hide Progress (3), Speed (4), ETA (5), Peers (6) on mobile */
   .torrents-table th:nth-child(3),
   .torrents-table th:nth-child(4),
   .torrents-table th:nth-child(5),
+  .torrents-table th:nth-child(6),
   .torrents-table td:nth-child(3),
   .torrents-table td:nth-child(4),
-  .torrents-table td:nth-child(5) {
+  .torrents-table td:nth-child(5),
+  .torrents-table td:nth-child(6) {
     display: none;
   }
 }

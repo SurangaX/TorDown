@@ -17,6 +17,7 @@
         <h1>⬇ TorDown</h1>
       </div>
       <div class="header-actions">
+        <button id="theme-toggle-btn" class="btn-icon" title="Toggle Dark Mode">🌙</button>
         <button id="refresh-btn" class="btn-icon" title="Refresh">🔄</button>
         <button id="clear-data-btn" class="btn-icon btn-danger" title="Cleanup">🗑️</button>
       </div>
@@ -142,17 +143,18 @@
       </div>
       <div class="torrents-container">
         <table id="torrent-table" class="torrents-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Progress</th>
-              <th>Speed</th>
-              <th>ETA</th>
-              <th>Peers</th>
-              <th>Data</th>
-              <th></th>
-            </tr>
-          </thead>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Speed</th>
+                        <th>ETA</th>
+                        <th>Peers</th>
+                        <th>Data</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
           <tbody></tbody>
         </table>
         <div class="torrents-empty" id="torrents-empty" hidden>

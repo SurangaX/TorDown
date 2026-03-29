@@ -7,6 +7,29 @@ const state = {
   messageTimeout: null,
 };
 
+// Initialize theme
+function initializeTheme() {
+  const storedTheme = localStorage.getItem('theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', storedTheme);
+  updateThemeButton(storedTheme);
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute('data-theme');
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeButton(newTheme);
+}
+
+function updateThemeButton(theme) {
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) {
+    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    btn.title = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+  }
+}
+
 const elements = {};
 
 // Video file extensions
@@ -15,6 +38,14 @@ const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm
 document.addEventListener("DOMContentLoaded", () => {
   elements.form = document.getElementById("add-torrent-form");
   elements.refreshBtn = document.getElementById("refresh-btn");
+
+    // Initialize theme
+    initializeTheme();
+    const themeToggleBtn = document.getElementById("theme-toggle-btn");
+    if (themeToggleBtn) {
+      themeToggleBtn.addEventListener("click", toggleTheme);
+    }
+
   elements.clearDataBtn = document.getElementById("clear-data-btn");
   elements.tableBody = document.querySelector("#torrent-table tbody");
   elements.notificationBar = document.getElementById("notification-bar");
@@ -235,11 +266,11 @@ async function onAddTorrentSubmit(event) {
   const providedSources = [magnetUri, torrentUrl, file ? "file" : ""].filter(Boolean).length;
 
   if (providedSources === 0) {
-    showMessage("Provide a magnet link, torrent URL, or upload a .torrent file.", true);
+    showMessage("Provide exactly one source: magnet link, torrent URL, or upload a .torrent file.", true);
     return;
   }
   if (providedSources > 1) {
-    showMessage("Please submit only one source (magnet, URL, or file).", true);
+    showMessage("Provide exactly one source: magnet link, torrent URL, or upload file.", true);
     return;
   }
 

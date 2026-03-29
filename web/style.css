@@ -224,6 +224,19 @@ body {
   stroke-linejoin: round;
 }
 
+.actions button svg,
+.details-quick-actions button svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  margin-right: 6px;
+  vertical-align: -2px;
+}
+
 .btn-icon.btn-danger,
 .actions button[data-action="remove"],
 .details-quick-actions .btn-danger,

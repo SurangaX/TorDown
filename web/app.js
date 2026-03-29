@@ -418,7 +418,10 @@ function renderTorrents(torrents) {
             <div class="actions">
               <button type="button" data-action="${resumeAction}" data-hash="${infoHash}">${resumeLabel}</button>
               <button type="button" data-action="details" data-hash="${infoHash}">${detailsLabel}</button>
-              <button type="button" data-action="download-zip" data-hash="${infoHash}" class="action-download-zip" title="Download as ZIP">📦 ZIP</button>
+              <button type="button" data-action="download-zip" data-hash="${infoHash}" class="action-download-zip" title="Download as ZIP" aria-label="Download as ZIP">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 8.5a2.5 2.5 0 0 1 2.5-2.5h13A2.5 2.5 0 0 1 21 8.5v10A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z"></path><path d="M8 6V4h8v2"></path><path d="M12 10v7"></path><path d="M9.5 14.5 12 17l2.5-2.5"></path></svg>
+                ZIP
+              </button>
               <button type="button" data-action="remove" data-hash="${infoHash}">Remove</button>
             </div>
           </td>
@@ -597,7 +600,10 @@ function renderTorrentDetails(summary, metadataPending) {
     <div class="details-quick-actions">
       <button type="button" data-details-action="${resumeAction}" class="btn-action">${resumeLabel}</button>
       <button type="button" data-details-action="refresh" class="btn-action">Refresh</button>
-      <button type="button" data-details-action="download-zip" class="download-zip-btn">📦 Download ZIP</button>
+      <button type="button" data-details-action="download-zip" class="download-zip-btn" aria-label="Download ZIP archive">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 8.5a2.5 2.5 0 0 1 2.5-2.5h13A2.5 2.5 0 0 1 21 8.5v10A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5z"></path><path d="M8 6V4h8v2"></path><path d="M12 10v7"></path><path d="M9.5 14.5 12 17l2.5-2.5"></path></svg>
+        Download ZIP
+      </button>
       <button type="button" data-details-action="remove-data" class="btn-danger">Delete</button>
     </div>
     

@@ -123,7 +123,7 @@ fi
 echo "=== Configuring TorDown environment ==="
 if [[ ! -f "${ENV_FILE}" ]]; then
     cat > "${ENV_FILE}" <<EOF
-TORDOWN_LISTEN_ADDR=:8080
+TORDOWN_LISTEN_ADDR=:443
 TORDOWN_DOWNLOAD_DIR=/var/lib/tordown/downloads
 EOF
 fi
@@ -138,6 +138,16 @@ if grep -q '^TORDOWN_SSL_KEY=' "${ENV_FILE}"; then
     sed -i "s|^TORDOWN_SSL_KEY=.*|TORDOWN_SSL_KEY=${KEY_PATH}|" "${ENV_FILE}"
 else
     echo "TORDOWN_SSL_KEY=${KEY_PATH}" >> "${ENV_FILE}"
+fi
+
+if grep -q '^TORDOWN_DOMAIN=' "${ENV_FILE}"; then
+    sed -i "s|^TORDOWN_DOMAIN=.*|TORDOWN_DOMAIN=${DOMAIN}|" "${ENV_FILE}"
+else
+    echo "TORDOWN_DOMAIN=${DOMAIN}" >> "${ENV_FILE}"
+fi
+
+if grep -q '^TORDOWN_LISTEN_ADDR=' "${ENV_FILE}"; then
+    sed -i "s|^TORDOWN_LISTEN_ADDR=.*|TORDOWN_LISTEN_ADDR=:443|" "${ENV_FILE}"
 fi
 
 echo "=== Installing renew deploy hook ==="
@@ -184,5 +194,13 @@ echo "Domain: ${DOMAIN}"
 echo "Certificate: ${CERT_PATH}"
 echo "Key: ${KEY_PATH}"
 echo ""
-echo "TorDown should now be reachable at: https://${DOMAIN}:8080"
-echo "If it is not reachable, verify inbound TCP 80 and 8080 on your firewall/router."
+echo "TorDown is now configured with:"
+echo "  - HTTPS on port 443: https://${DOMAIN}"
+echo "  - HTTP redirect on port 80 → HTTPS (automatic)"
+echo ""
+echo "Access TorDown at: https://${DOMAIN}"
+echo "HTTP traffic to http://${DOMAIN} will redirect automatically."
+echo ""
+echo "If not reachable, verify:"
+echo "  - Inbound TCP 80 and 443 are open on your firewall/VPS"
+echo "  - DNS for ${DOMAIN} points to this server"

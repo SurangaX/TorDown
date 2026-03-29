@@ -6,7 +6,7 @@ This guide will help you set up HTTPS/SSL for your TorDown server using Let's En
 
 1. A DuckDNS account and subdomain (e.g., `myserver.duckdns.org`)
 2. Your server's public IP configured in DuckDNS
-3. Port 80 and 8080 open on your firewall/router
+3. Port 80 and 443 open on your firewall/VPS control panel
 4. Root access to your Ubuntu server
 
 ## Quick Setup
@@ -52,7 +52,12 @@ This guide will help you set up HTTPS/SSL for your TorDown server using Let's En
 
 6. **Access your site:**
    ```
-   https://your-subdomain.duckdns.org:8080
+   https://your-subdomain.duckdns.org
+   ```
+   
+   HTTP traffic automatically redirects to HTTPS:
+   ```
+   http://your-subdomain.duckdns.org → https://your-subdomain.duckdns.org
    ```
 
 ## Manual Setup (Alternative)
@@ -83,7 +88,8 @@ sudo certbot certonly --standalone \
 ```bash
 export TORDOWN_SSL_CERT=/etc/letsencrypt/live/your-subdomain.duckdns.org/fullchain.pem
 export TORDOWN_SSL_KEY=/etc/letsencrypt/live/your-subdomain.duckdns.org/privkey.pem
-export TORDOWN_LISTEN_ADDR=:8080
+export TORDOWN_LISTEN_ADDR=:443
+export TORDOWN_DOMAIN=your-subdomain.duckdns.org
 ```
 
 ### 5. Build and Run
@@ -163,52 +169,29 @@ sudo ./tordown
 sudo systemctl start tordown
 ```
 
-## Using with Nginx Reverse Proxy
+## HTTP → HTTPS Redirect
 
-If you want to use standard HTTPS port (443), set up nginx:
+The setup script automatically configures HTTP→HTTPS redirect:
+- **Port 80 (HTTP):** Redirects all traffic to HTTPS on port 443
+- **Port 443 (HTTPS):** Serves TorDown with SSL certificate
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name your-subdomain.duckdns.org;
+No additional configuration needed. All HTTP requests are redirected with a 301 (permanent) status.
 
-    ssl_certificate /etc/letsencrypt/live/your-subdomain.duckdns.org/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/your-subdomain.duckdns.org/privkey.pem;
-
-    location / {
-        proxy_pass http://localhost:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-
-server {
-    listen 80;
-    server_name your-subdomain.duckdns.org;
-    return 301 https://$server_name$request_uri;
-}
+### Example Redirects:
 ```
-
-Then:
-```bash
-sudo nginx -t
-sudo systemctl reload nginx
+http://your-subdomain.duckdns.org       → https://your-subdomain.duckdns.org
+http://your-subdomain.duckdns.org/api   → https://your-subdomain.duckdns.org/api
 ```
 
 ## Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TORDOWN_LISTEN_ADDR` | Server address and port | `:8080` |
+| `TORDOWN_LISTEN_ADDR` | Server address and port (HTTPS when certs present) | `:443` |
 | `TORDOWN_DOWNLOAD_DIR` | Directory for downloads | `./downloads` |
-| `TORDOWN_SSL_CERT` | Path to SSL certificate | (none - uses HTTP) |
-| `TORDOWN_SSL_KEY` | Path to SSL private key | (none - uses HTTP) |
+| `TORDOWN_DOMAIN` | Domain name for HTTP→HTTPS redirect | (defaults to request host) |
+| `TORDOWN_SSL_CERT` | Path to SSL certificate file | (none - uses HTTP only) |
+| `TORDOWN_SSL_KEY` | Path to SSL private key file | (none - uses HTTP only) |
 
 ## Security Notes
 
@@ -218,15 +201,17 @@ sudo systemctl reload nginx
 - Consider using a firewall (ufw)
 - Regularly update your system and dependencies
 
-## Port Forwarding
+## Port Configuration
 
-If behind a router, forward these ports:
+**For SSL setup and operation:**
 
 | Port | Protocol | Purpose |
-|------|----------|---------|
-| 80 | TCP | Let's Encrypt validation |
-| 8080 | TCP | TorDown HTTPS server |
+|------|----------|----------|
+| 80 | TCP | Let's Encrypt ACME validation + HTTP→HTTPS redirect |
+| 443 | TCP | TorDown HTTPS server (default with SSL) |
 | 42069 | TCP/UDP | Torrent peer connections |
+
+**If behind a router:** Forward ports 80 and 443 to your VPS or forward your VPS ports directly at the control panel.
 
 ## Need Help?
 

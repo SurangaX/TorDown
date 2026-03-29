@@ -12,7 +12,7 @@ TorDown is a minimal web UI for managing torrents backed by [`github.com/anacrol
 - **Download completed files from server to your PC** with one-click per-file downloads
 - **Download entire torrent as ZIP** - packages all completed files into a single archive
 - **Built-in video player** - stream and watch movies directly in the browser (supports MP4, WebM, MKV, and more)
-- **Server resource monitor** - real-time CPU, RAM, storage, and network speed monitoring
+- **Server resource monitor** - circular gauges for real-time CPU, RAM, and storage monitoring with live updates
 - **Accurate download size reporting** - storage tile shows true download folder usage
 - **Clear Data action** - remove orphaned leftover files and purge ZIP cache files from `/tmp/tordown-zip-cache`
 - **Incomplete file delete action** - remove partial files directly from torrent details
@@ -20,6 +20,9 @@ TorDown is a minimal web UI for managing torrents backed by [`github.com/anacrol
 - **Large ZIP stability** - big archives are prepared in background before download starts
 - **Prepared ZIP workflow** - UI prepares ZIP in background, then starts a range-capable download
 - **ZIP prepare progress** - live percent, processed size, and ETA shown while archive is being built
+- **Dark mode / Light mode** - automatic theme support with persistent user preference
+- **HTTPS/SSL with Let's Encrypt** - automatic HTTP → HTTPS redirect, production-ready certificate management
+- **Modern UI icons** - clean SVG icons for theme toggle, refresh, and ZIP download actions
 - Session overview panel with live stats plus an interactive details drawer
 - Static HTML/JS frontend with automatic polling (no external dependencies)
 - Minimalistic, clean UI design for efficient torrent management
@@ -41,9 +44,26 @@ go mod tidy
 go run ./cmd/server
 ```
 
-By default the server listens on `:8080` and stores data in `./downloads`. Visit `http://localhost:8080` to access the UI.
+By default the server listens on `:8080` (HTTP) and stores data in `./downloads`. Visit `http://localhost:8080` to access the UI. For production with SSL, the server listens on `:443` (HTTPS) with automatic HTTP redirect on port 80.
 
 ## Ubuntu Server Startup
+
+### SSL/HTTPS Setup (Recommended)
+
+For production deployments, set up HTTPS with Let's Encrypt:
+
+```bash
+chmod +x setup-ssl.sh
+sudo ./setup-ssl.sh your-domain.duckdns.org your-email@example.com
+```
+
+This script will:
+- Install certbot and obtain an SSL certificate
+- Configure TorDown to listen on port 443 (HTTPS)
+- Set up automatic HTTP → HTTPS redirect on port 80
+- Enable automatic certificate renewal
+
+See [SSL-SETUP.md](SSL-SETUP.md) for detailed SSL configuration, including webroot challenge mode and staging endpoint testing.
 
 ### Quick Start (Foreground)
 
@@ -90,8 +110,15 @@ Environment variables:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `TORDOWN_LISTEN_ADDR` | `:8080` | Address for the HTTP listener |
+| `TORDOWN_LISTEN_ADDR` | `:443` (with SSL) or `:8080` | Address and port for the server |
 | `TORDOWN_DOWNLOAD_DIR` | `./downloads` | Directory where torrent data is stored |
+| `TORDOWN_DOMAIN` | (none) | Domain name for HTTP → HTTPS redirect (e.g., `example.duckdns.org`) |
+| `TORDOWN_SSL_CERT` | (none) | Path to SSL certificate file (enables HTTPS) |
+| `TORDOWN_SSL_KEY` | (none) | Path to SSL private key file (enables HTTPS) |
+
+**HTTP vs HTTPS:**
+- **Without SSL variables:** Runs plain HTTP on configured port (default `:8080`)
+- **With SSL variables:** Runs HTTPS on configured port (default `:443`) + HTTP redirect server on port 80
 
 ### API Overview
 
@@ -124,6 +151,10 @@ For the selection endpoint, send `{"applySelection": true, "selectedFiles": [0,2
 - Static assets live in `web/` and are served directly by the Go process.
 - Long-running file and ZIP download endpoints bypass API request timeout to avoid interrupted large transfers.
 - When Go tooling is unavailable, run `go mod tidy` on a machine with Go installed to generate `go.sum` and download dependencies.
+- Frontend uses vanilla JavaScript with CSS custom properties for theme support (dark mode on by default).
+- Circular resource gauges use CSS `conic-gradient` for live CPU, RAM, and disk monitoring.
+- SSL/HTTPS mode spawns two listeners: main HTTPS server on port 443 and HTTP redirect server on port 80 (both share graceful shutdown).
+- Certificate renewal via certbot automatically restarts the tordown service via deploy hook.
 
 ## License
 

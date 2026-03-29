@@ -85,17 +85,6 @@ TORDOWN_LISTEN_ADDR=:8080 TORDOWN_DOWNLOAD_DIR=/srv/tordown/downloads ./scripts/
 Use this on an Ubuntu server for persistent background operation:
 
 ```bash
-chmod +x scripts/install-ubuntu.sh
-sudo ./scripts/install-ubuntu.sh
-```
-
-The installer provides a simple first-time choice:
-- HTTP mode (`:8080`)
-- HTTPS mode with Let's Encrypt (`:443` + certificate setup)
-
-For non-interactive/manual service install only:
-
-```bash
 chmod +x scripts/install-ubuntu-service.sh
 sudo ./scripts/install-ubuntu-service.sh
 ```
@@ -114,8 +103,6 @@ After changing it, reload with:
 ```bash
 sudo systemctl restart tordown
 ```
-
-`scripts/update-ubuntu.sh` rebuilds/restarts the service without replacing your existing `/etc/tordown.env` values.
 
 ### Configuration
 

@@ -1,6 +1,7 @@
 # TorDown
 
 TorDown is a minimal web UI for managing torrents backed by [`github.com/anacrolix/torrent`](https://github.com/anacrolix/torrent). It targets headless Ubuntu servers but runs anywhere Go is available. The server exposes a small JSON API and serves a lightweight single-page application for quick remote management.
+<img width="1919" height="918" alt="image" src="https://github.com/user-attachments/assets/3abb01a1-e089-41bc-ac90-de98e7a85eb0" />
 
 ## Features
 

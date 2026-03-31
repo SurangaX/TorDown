@@ -173,11 +173,22 @@ body {
   border-radius: 10px;
   padding: 10px 12px;
   font-weight: 600;
-  color: #fff;
   background: var(--primary-strong);
   cursor: pointer;
   text-decoration: none;
   transition: transform 0.14s ease, background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.btn-primary,
+.details-quick-actions .btn-action:not(.btn-danger),
+.details-actions button:not(.btn-danger):not(.delete-file-btn) {
+  color: #fff;
+}
+
+:root[data-theme="light"] .btn-primary,
+:root[data-theme="light"] .details-quick-actions .btn-action:not(.btn-danger),
+:root[data-theme="light"] .details-actions button:not(.btn-danger):not(.delete-file-btn) {
+  color: var(--text);
 }
 
 .btn-primary:hover,
@@ -890,10 +901,13 @@ body {
 
   .actions {
     flex-direction: column;
+    gap: 4px;
   }
 
   .actions button {
     width: 100%;
+    padding: 8px 10px;
+    font-size: 0.75rem;
   }
 }
 
@@ -903,6 +917,15 @@ body {
   .torrents-table td:nth-child(3),
   .torrents-table td:nth-child(6) {
     display: none;
+  }
+
+  .torrents-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .torrents-table {
+    min-width: 420px;
   }
 
   .modal-content {

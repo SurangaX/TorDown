@@ -390,6 +390,14 @@ body {
   overflow: hidden;
 }
 
+@media (max-width: 520px) {
+  .torrents-container {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
 .torrents-table {
   width: 100%;
   border-collapse: separate;
@@ -917,11 +925,6 @@ body {
   .torrents-table td:nth-child(3),
   .torrents-table td:nth-child(6) {
     display: none;
-  }
-
-  .torrents-container {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   .torrents-table {

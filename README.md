@@ -3,6 +3,80 @@
 TorDown is a minimal web UI for managing torrents backed by [`github.com/anacrolix/torrent`](https://github.com/anacrolix/torrent). It targets headless Ubuntu servers but runs anywhere Go is available. The server exposes a small JSON API and serves a lightweight single-page application for quick remote management.
 <img width="1919" height="918" alt="image" src="https://github.com/user-attachments/assets/3abb01a1-e089-41bc-ac90-de98e7a85eb0" />
 
+## Quick Start for Beginners
+
+### 1️⃣ Prerequisites
+
+**Option A: Local Machine (Windows, Mac, Linux)**
+- Download and install [Go 1.22+](https://golang.org/dl)
+- Any modern web browser
+
+**Option B: Ubuntu Server**
+- SSH access to your Ubuntu server
+- Go 1.22+ installed on the server
+
+### 2️⃣ Clone & Setup (Local Testing)
+
+```bash
+git clone https://github.com/SurangaX/TorDown.git
+cd TorDown
+go mod tidy
+go run ./cmd/server
+```
+
+Then open `http://localhost:8080` in your browser. Done! 🎉
+
+### 3️⃣ Ubuntu Server Setup (Production)
+
+Run this on your Ubuntu server:
+
+```bash
+git clone https://github.com/SurangaX/TorDown.git
+cd TorDown
+sudo chmod +x scripts/install-ubuntu-service.sh
+sudo ./scripts/install-ubuntu-service.sh
+```
+
+That's it! TorDown will:
+- ✅ Install as a system service
+- ✅ Start on server boot automatically
+- ✅ Run on `http://your-server-ip:8080`
+
+Check status:
+```bash
+sudo systemctl status tordown
+```
+
+### 4️⃣ Add Your First Torrent
+
+1. Open the web UI
+2. Paste a **magnet link** OR upload a **.torrent file** OR paste a direct torrent URL
+3. Click "Add"
+4. Select files you want to download
+5. Watch the progress live!
+
+### 5️⃣ Optional: HTTPS with Domain
+
+For secure remote access (recommended for production):
+
+```bash
+sudo chmod +x setup-ssl.sh
+sudo ./setup-ssl.sh your-domain.duckdns.org your-email@example.com
+```
+
+Then access via `https://your-domain.duckdns.org` 🔒
+
+### 6️⃣ Update Later
+
+To update to the latest version:
+
+```bash
+cd TorDown
+sudo ./scripts/update-ubuntu.sh
+```
+
+The script automatically handles everything and preserves your settings!
+
 ## Features
 
 - Add torrents via magnet URI, direct `.torrent` URL fetch, or uploaded `.torrent` file
@@ -28,6 +102,7 @@ TorDown is a minimal web UI for managing torrents backed by [`github.com/anacrol
 - Static HTML/JS frontend with automatic polling (no external dependencies)
 - Minimalistic, clean UI design for efficient torrent management
 - Fully responsive mobile view
+
 
 ## Requirements
 

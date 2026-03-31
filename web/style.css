@@ -257,11 +257,21 @@ body {
   border-color: rgba(248, 113, 113, 0.45);
 }
 
+:root[data-theme="light"] .actions button[data-action="remove"],
+:root[data-theme="light"] .delete-file-btn {
+  color: #991b1b;
+}
+
 .actions button[data-action="download-zip"],
 .download-zip-btn {
   background: rgba(96, 165, 250, 0.18);
   color: #dbeafe;
   border-color: rgba(96, 165, 250, 0.45);
+}
+
+:root[data-theme="light"] .actions button[data-action="download-zip"],
+:root[data-theme="light"] .download-zip-btn {
+  color: #1e40af;
 }
 
 .stats-header,

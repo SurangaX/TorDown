@@ -367,10 +367,15 @@ async function refreshTorrents(options = {}) {
 
 function renderTorrents(torrents) {
   const tbody = elements.tableBody;
+  const torrentsEmpty = document.getElementById("torrents-empty");
+
   if (!Array.isArray(torrents) || torrents.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty">No torrents yet.</td></tr>`;
+    tbody.innerHTML = "";
+    if (torrentsEmpty) torrentsEmpty.hidden = false;
     return;
   }
+
+  if (torrentsEmpty) torrentsEmpty.hidden = true;
 
   tbody.innerHTML = torrents
     .map((torrent) => {

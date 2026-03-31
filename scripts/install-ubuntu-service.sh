@@ -33,14 +33,20 @@ go build -o "${BIN_PATH}" ./cmd/server
 chown "${RUN_USER}:${RUN_GROUP}" "${BIN_PATH}"
 chmod 0755 "${BIN_PATH}"
 
-cat > "${ENV_FILE}" <<EOF
+# Only create ENV_FILE if it doesn't exist (preserve on updates)
+if [[ ! -f "${ENV_FILE}" ]]; then
+  cat > "${ENV_FILE}" <<EOF
 TORDOWN_LISTEN_ADDR=${LISTEN_ADDR}
 TORDOWN_DOWNLOAD_DIR=${DOWNLOAD_DIR}
 # Optional TLS settings:
 # TORDOWN_SSL_CERT=/etc/letsencrypt/live/example.com/fullchain.pem
 # TORDOWN_SSL_KEY=/etc/letsencrypt/live/example.com/privkey.pem
 EOF
-chmod 0644 "${ENV_FILE}"
+  chmod 0644 "${ENV_FILE}"
+  echo "Created new config at ${ENV_FILE}"
+else
+  echo "Preserving existing config at ${ENV_FILE}"
+fi
 
 cat > "${UNIT_FILE}" <<EOF
 [Unit]

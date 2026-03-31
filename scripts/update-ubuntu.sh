@@ -28,7 +28,7 @@ else
 fi
 
 # Pull the latest changes
-git pull origin main || { echo -e "${RED}Failed to pull from git${NC}"; exit 1; }
+git pull --no-rebase origin main || { echo -e "${RED}Failed to pull from git${NC}"; exit 1; }
 echo -e "${GREEN}✓ Git pull successful${NC}"
 
 # Restore stashed changes if any

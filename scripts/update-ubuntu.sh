@@ -17,8 +17,25 @@ fi
 
 # Step 1: Fetch latest changes
 echo -e "\n${YELLOW}1. Pulling latest changes from git...${NC}"
+
+# Check for uncommitted changes and stash them
+if ! git diff-index --quiet HEAD --; then
+  echo -e "${YELLOW}Found local changes, stashing them...${NC}"
+  git stash push -m "update-script-auto-stash"
+  STASHED=true
+else
+  STASHED=false
+fi
+
+# Pull the latest changes
 git pull origin main || { echo -e "${RED}Failed to pull from git${NC}"; exit 1; }
 echo -e "${GREEN}✓ Git pull successful${NC}"
+
+# Restore stashed changes if any
+if [[ "$STASHED" == true ]]; then
+  echo -e "${YELLOW}Restoring local changes...${NC}"
+  git stash pop || echo -e "${YELLOW}Warning: Could not restore all changes. Check git stash list.${NC}"
+fi
 
 # Step 2: Check if Go is available in expected path
 echo -e "\n${YELLOW}2. Checking Go installation...${NC}"

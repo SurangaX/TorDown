@@ -18,8 +18,9 @@ import (
 
     atorrent "github.com/anacrolix/torrent"
     "github.com/anacrolix/torrent/metainfo"
-)
-
+    "tordown/internal/storage"
+    "tordown/internal/telegram"
+    )
 const maxTorrentFileSize = 20 << 20 // 20 MiB safeguard when fetching remote torrent files
 
 const persistedStateFileName = ".tordown-state.json"
@@ -33,11 +34,13 @@ var (
 
 // Config defines the runtime options for the torrent manager.
 type Config struct {
-    DownloadDir string
-    ListenPort  int
-    Seed        bool
-    NoUpload    bool
-    HTTPClient  *http.Client
+    DownloadDir    string
+    ListenPort     int
+    Seed           bool
+    NoUpload       bool
+    HTTPClient     *http.Client
+    StorageMode    string           // "local" or "telegram"
+    TelegramClient *telegram.Client // Required if StorageMode is "telegram"
 }
 
 // AddOptions capture torrent preferences at add time.
@@ -109,6 +112,10 @@ func NewManager(ctx context.Context, cfg Config) (*Manager, error) {
     clientCfg.DisableAggressiveUpload = true
     if cfg.ListenPort > 0 {
         clientCfg.ListenPort = cfg.ListenPort
+    }
+
+    if cfg.StorageMode == "telegram" && cfg.TelegramClient != nil {
+        clientCfg.DefaultStorage = storage.NewTelegramStorage(cfg.TelegramClient)
     }
 
     client, err := atorrent.NewClient(clientCfg)

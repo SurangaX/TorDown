@@ -1,0 +1,23 @@
+# Binaries
+bin/
+*.exe
+*.test
+*.prof
+
+# Downloads & State
+downloads/
+.tordown-state.json
+.tordown-state.json.tmp
+tordown-zip-cache/
+
+# Telegram Session
+.telegram/
+session.json
+
+# Environment
+.env
+*.env
+
+# OS
+.DS_Store
+Thumbs.db

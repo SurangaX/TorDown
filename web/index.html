@@ -30,6 +30,54 @@
   </header>
 
   <main class="main">
+    <!-- Telegram Auth Section -->
+    <section id="telegram-auth-section" class="section telegram-section">
+      <div class="telegram-header">
+        <h2>📱 Telegram Cloud Storage</h2>
+        <button id="telegram-logout-btn" class="btn-secondary" hidden>Logout</button>
+      </div>
+      <div id="telegram-status" class="telegram-status">
+        <p>Checking connection...</p>
+      </div>
+      
+      <!-- Connect Form (API ID/Hash) -->
+      <form id="telegram-connect-form" class="telegram-form" hidden>
+        <p class="form-help">Enter your Telegram API credentials to use cloud storage. <a href="https://my.telegram.org" target="_blank">Get them here</a>.</p>
+        <div class="form-group-vertical">
+          <input type="number" id="tg-api-id" class="form-input" placeholder="API ID" required>
+          <input type="text" id="tg-api-hash" class="form-input" placeholder="API Hash" required>
+          <button type="submit" class="btn-primary">Connect</button>
+        </div>
+      </form>
+
+      <!-- Login Form (Phone) -->
+      <form id="telegram-login-form" class="telegram-form" hidden>
+        <p class="form-help">Enter your phone number in international format (e.g., +1234567890).</p>
+        <div class="form-group">
+          <input type="tel" id="tg-phone" class="form-input" placeholder="+1234567890" required>
+          <button type="submit" class="btn-primary">Send Code</button>
+        </div>
+      </form>
+
+      <!-- Verify Form (Code) -->
+      <form id="telegram-verify-form" class="telegram-form" hidden>
+        <p class="form-help">Enter the code sent to your Telegram account.</p>
+        <div class="form-group">
+          <input type="text" id="tg-code" class="form-input" placeholder="Auth Code" required>
+          <button type="submit" class="btn-primary">Verify</button>
+        </div>
+      </form>
+
+      <!-- Password Form (2FA) -->
+      <form id="telegram-password-form" class="telegram-form" hidden>
+        <p class="form-help">Two-step verification is enabled. Enter your password.</p>
+        <div class="form-group">
+          <input type="password" id="tg-password" class="form-input" placeholder="2FA Password" required>
+          <button type="submit" class="btn-primary">Login</button>
+        </div>
+      </form>
+    </section>
+
     <!-- Quick Add Section -->
     <section class="section add-section">
       <form id="add-torrent-form" class="add-form">

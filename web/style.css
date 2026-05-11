@@ -86,6 +86,7 @@ body {
 }
 
 .add-section,
+.telegram-section,
 .torrents-container,
 .stat-card,
 .resource-item,
@@ -96,8 +97,53 @@ body {
   box-shadow: var(--shadow);
 }
 
-.add-section {
+.add-section,
+.telegram-section {
   padding: 16px;
+}
+
+.telegram-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.telegram-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.telegram-status {
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.telegram-form {
+  display: grid;
+  gap: 12px;
+}
+
+.form-group-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-help {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.form-help a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.form-help a:hover {
+  text-decoration: underline;
 }
 
 .add-form .form-group {

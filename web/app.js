@@ -80,6 +80,20 @@ document.addEventListener("DOMContentLoaded", () => {
   elements.startDownloadSelected = document.getElementById("start-download-selected");
   elements.startDownloadAll = document.getElementById("start-download-all");
   
+  // Telegram elements
+  elements.tgAuthSection = document.getElementById("telegram-auth-section");
+  elements.tgStatus = document.getElementById("telegram-status");
+  elements.tgLogoutBtn = document.getElementById("telegram-logout-btn");
+  elements.tgConnectForm = document.getElementById("telegram-connect-form");
+  elements.tgLoginForm = document.getElementById("telegram-login-form");
+  elements.tgVerifyForm = document.getElementById("telegram-verify-form");
+  elements.tgPasswordForm = document.getElementById("telegram-password-form");
+  elements.tgApiIdInput = document.getElementById("tg-api-id");
+  elements.tgApiHashInput = document.getElementById("tg-api-hash");
+  elements.tgPhoneInput = document.getElementById("tg-phone");
+  elements.tgCodeInput = document.getElementById("tg-code");
+  elements.tgPasswordInput = document.getElementById("tg-password");
+
   // Cleanup modal elements
   elements.cleanupModal = document.getElementById("cleanup-modal");
   elements.closeCleanup = document.getElementById("close-cleanup");
@@ -121,6 +135,13 @@ document.addEventListener("DOMContentLoaded", () => {
   elements.cleanupCancelBtn.addEventListener("click", closeCleanupModal);
   elements.cleanupExecuteBtn.addEventListener("click", executeCleanup);
   
+  // Telegram listeners
+  elements.tgConnectForm.addEventListener("submit", onTelegramConnectSubmit);
+  elements.tgLoginForm.addEventListener("submit", onTelegramRequestCodeSubmit);
+  elements.tgVerifyForm.addEventListener("submit", onTelegramSignInSubmit);
+  elements.tgPasswordForm.addEventListener("submit", onTelegramCheckPasswordSubmit);
+  elements.tgLogoutBtn.addEventListener("click", onTelegramLogoutClick);
+
   elements.magnetInput.addEventListener("input", syncSourceInputs);
   elements.torrentUrlInput.addEventListener("input", syncSourceInputs);
   elements.fileInput.addEventListener("change", syncSourceInputs);
@@ -128,6 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   syncSourceInputs();
 
+  checkTelegramStatus();
   refreshTorrents();
   state.timer = setInterval(refreshTorrents, POLL_INTERVAL_MS);
 
@@ -1251,6 +1273,112 @@ async function downloadAllFiles() {
     closeFileSelectionModal();
     showMessage("Downloading all files.", false);
     await refreshTorrents();
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+// Telegram Functions
+async function checkTelegramStatus() {
+  try {
+    const status = await apiRequest("GET", `${API_BASE}/telegram/check`);
+    updateTelegramUI(status);
+  } catch (error) {
+    console.error("Failed to check Telegram status:", error);
+    elements.tgStatus.innerHTML = `<p class="error">Failed to connect to backend.</p>`;
+  }
+}
+
+function updateTelegramUI(status) {
+  // Hide all forms first
+  elements.tgConnectForm.hidden = true;
+  elements.tgLoginForm.hidden = true;
+  elements.tgVerifyForm.hidden = true;
+  elements.tgPasswordForm.hidden = true;
+  elements.tgLogoutBtn.hidden = true;
+
+  if (!status.initialized) {
+    elements.tgStatus.innerHTML = `<p>Not connected to Telegram API.</p>`;
+    elements.tgConnectForm.hidden = false;
+  } else if (!status.authenticated) {
+    elements.tgStatus.innerHTML = `<p>Connected to API, but not logged in.</p>`;
+    elements.tgLoginForm.hidden = false;
+  } else {
+    elements.tgStatus.innerHTML = `<p class="success">✅ Logged in to Telegram. Cloud storage active.</p>`;
+    elements.tgLogoutBtn.hidden = false;
+  }
+}
+
+async function onTelegramConnectSubmit(event) {
+  event.preventDefault();
+  const apiId = parseInt(elements.tgApiIdInput.value);
+  const apiHash = elements.tgApiHashInput.value.trim();
+
+  try {
+    await apiRequest("POST", `${API_BASE}/telegram/connect`, { apiId, apiHash });
+    showMessage("Connected to Telegram API.", false);
+    await checkTelegramStatus();
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+async function onTelegramRequestCodeSubmit(event) {
+  event.preventDefault();
+  const phone = elements.tgPhoneInput.value.trim();
+
+  try {
+    await apiRequest("POST", `${API_BASE}/telegram/request-code`, { phone });
+    showMessage("Auth code sent to your Telegram.", false);
+    elements.tgLoginForm.hidden = true;
+    elements.tgVerifyForm.hidden = false;
+    elements.tgStatus.innerHTML = `<p>Enter the code sent to ${phone}.</p>`;
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+async function onTelegramSignInSubmit(event) {
+  event.preventDefault();
+  const code = elements.tgCodeInput.value.trim();
+
+  try {
+    const result = await apiRequest("POST", `${API_BASE}/telegram/sign-in`, { code });
+    if (result.success) {
+      showMessage("Successfully logged in!", false);
+      await checkTelegramStatus();
+    } else if (result.next === "password_required") {
+      elements.tgVerifyForm.hidden = true;
+      elements.tgPasswordForm.hidden = false;
+      elements.tgStatus.innerHTML = `<p>2FA Password required.</p>`;
+    }
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+async function onTelegramCheckPasswordSubmit(event) {
+  event.preventDefault();
+  const password = elements.tgPasswordInput.value.trim();
+
+  try {
+    const result = await apiRequest("POST", `${API_BASE}/telegram/check-password`, { password });
+    if (result.success) {
+      showMessage("Successfully logged in!", false);
+      await checkTelegramStatus();
+    }
+  } catch (error) {
+    showMessage(error.message, true);
+  }
+}
+
+async function onTelegramLogoutClick() {
+  if (!confirm("Are you sure you want to logout from Telegram?")) return;
+
+  try {
+    await apiRequest("POST", `${API_BASE}/telegram/logout`);
+    showMessage("Logged out from Telegram.", false);
+    await checkTelegramStatus();
   } catch (error) {
     showMessage(error.message, true);
   }

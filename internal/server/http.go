@@ -19,14 +19,16 @@ import (
     "github.com/go-chi/chi/v5"
     "github.com/go-chi/chi/v5/middleware"
 
+    "tordown/internal/telegram"
     "tordown/internal/torrent"
 )
 
 // Config wires dependencies for the HTTP server facade.
 type Config struct {
-    Manager     *torrent.Manager
-    StaticDir   string
-    DownloadDir string
+    Manager        *torrent.Manager
+    TelegramClient *telegram.Client
+    StaticDir      string
+    DownloadDir    string
 }
 
 // NewHTTPServer constructs the chi router responsible for API and static assets.
@@ -36,10 +38,11 @@ func NewHTTPServer(cfg Config) (http.Handler, error) {
     }
 
     srv := &httpServer{
-        manager:     cfg.Manager,
-        downloadDir: cfg.DownloadDir,
-        zipBuilds:   make(map[string]struct{}),
-        zipStatus:   make(map[string]*zipBuildStatus),
+        manager:        cfg.Manager,
+        telegramClient: cfg.TelegramClient,
+        downloadDir:    cfg.DownloadDir,
+        zipBuilds:      make(map[string]struct{}),
+        zipStatus:      make(map[string]*zipBuildStatus),
     }
 
     if trimmed := strings.TrimSpace(cfg.StaticDir); trimmed != "" {
@@ -71,9 +74,10 @@ func NewHTTPServer(cfg Config) (http.Handler, error) {
 }
 
 type httpServer struct {
-    manager     *torrent.Manager
-    staticDir   string
-    downloadDir string
+    manager        *torrent.Manager
+    telegramClient *telegram.Client
+    staticDir      string
+    downloadDir    string
 
     zipBuildMu sync.Mutex
     zipBuilds  map[string]struct{}
@@ -98,6 +102,15 @@ func (s *httpServer) mountAPI(r chi.Router) {
     r.Post("/data/cleanup", s.handleCleanupData)
     r.Get("/torrents", s.handleListTorrents)
     r.Post("/torrents", s.handleAddTorrent)
+
+    r.Route("/telegram", func(r chi.Router) {
+        r.Post("/connect", s.handleTelegramConnect)
+        r.Get("/check", s.handleTelegramCheck)
+        r.Post("/request-code", s.handleTelegramRequestCode)
+        r.Post("/sign-in", s.handleTelegramSignIn)
+        r.Post("/check-password", s.handleTelegramCheckPassword)
+        r.Post("/logout", s.handleTelegramLogout)
+    })
 
     r.Route("/torrents/{infoHash}", func(r chi.Router) {
         r.Get("/", s.handleGetTorrent)
@@ -526,6 +539,23 @@ type addTorrentRequest struct {
 type selectionRequest struct {
     SelectedFiles  []int `json:"selectedFiles"`
     ApplySelection bool  `json:"applySelection"`
+}
+
+type telegramConnectRequest struct {
+    APIID   int    `json:"apiId"`
+    APIHash string `json:"apiHash"`
+}
+
+type telegramRequestCodeRequest struct {
+    Phone string `json:"phone"`
+}
+
+type telegramSignInRequest struct {
+    Code string `json:"code"`
+}
+
+type telegramCheckPasswordRequest struct {
+    Password string `json:"password"`
 }
 
 func (s *httpServer) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
@@ -965,4 +995,126 @@ func cleanupZipDir(dir string, cutoff time.Time, removeAnyZip bool) ([]string, e
     }
 
     return removed, nil
+}
+
+func (s *httpServer) handleTelegramConnect(w http.ResponseWriter, r *http.Request) {
+    var payload telegramConnectRequest
+    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+        respondError(w, err)
+        return
+    }
+
+    if payload.APIID == 0 || payload.APIHash == "" {
+        respondError(w, errors.New("apiId and apiHash are required"))
+        return
+    }
+
+    s.telegramClient = telegram.NewClient(payload.APIID, payload.APIHash, filepath.Join(s.downloadDir, ".telegram"))
+    
+    if err := s.telegramClient.EnsureConnected(r.Context()); err != nil {
+        respondError(w, err)
+        return
+    }
+
+    respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (s *httpServer) handleTelegramCheck(w http.ResponseWriter, r *http.Request) {
+    if s.telegramClient == nil {
+        respondJSON(w, http.StatusOK, map[string]interface{}{"authenticated": false, "initialized": false})
+        return
+    }
+
+    if err := s.telegramClient.EnsureConnected(r.Context()); err != nil {
+        respondError(w, err)
+        return
+    }
+
+    auth, err := s.telegramClient.IsAuthenticated(r.Context())
+    if err != nil {
+        respondError(w, err)
+        return
+    }
+
+    respondJSON(w, http.StatusOK, map[string]interface{}{"authenticated": auth, "initialized": true})
+}
+
+func (s *httpServer) handleTelegramRequestCode(w http.ResponseWriter, r *http.Request) {
+    var payload telegramRequestCodeRequest
+    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+        respondError(w, err)
+        return
+    }
+
+    if s.telegramClient == nil {
+        respondError(w, errors.New("telegram client not initialized"))
+        return
+    }
+
+    status, err := s.telegramClient.RequestCode(r.Context(), payload.Phone)
+    if err != nil {
+        respondError(w, err)
+        return
+    }
+
+    respondJSON(w, http.StatusOK, map[string]string{"status": status})
+}
+
+func (s *httpServer) handleTelegramSignIn(w http.ResponseWriter, r *http.Request) {
+    var payload telegramSignInRequest
+    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+        respondError(w, err)
+        return
+    }
+
+    if s.telegramClient == nil {
+        respondError(w, errors.New("telegram client not initialized"))
+        return
+    }
+
+    success, next, err := s.telegramClient.SignIn(r.Context(), payload.Code)
+    if err != nil {
+        respondError(w, err)
+        return
+    }
+
+    respondJSON(w, http.StatusOK, map[string]interface{}{
+        "success": success,
+        "next":    next,
+    })
+}
+
+func (s *httpServer) handleTelegramCheckPassword(w http.ResponseWriter, r *http.Request) {
+    var payload telegramCheckPasswordRequest
+    if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+        respondError(w, err)
+        return
+    }
+
+    if s.telegramClient == nil {
+        respondError(w, errors.New("telegram client not initialized"))
+        return
+    }
+
+    success, err := s.telegramClient.CheckPassword(r.Context(), payload.Password)
+    if err != nil {
+        respondError(w, err)
+        return
+    }
+
+    respondJSON(w, http.StatusOK, map[string]bool{"success": success})
+}
+
+func (s *httpServer) handleTelegramLogout(w http.ResponseWriter, r *http.Request) {
+    if s.telegramClient == nil {
+        respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+        return
+    }
+
+    if err := s.telegramClient.Logout(r.Context()); err != nil {
+        respondError(w, err)
+        return
+    }
+
+    respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }

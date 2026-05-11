@@ -7,11 +7,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"tordown/internal/server"
+	"tordown/internal/telegram"
 	"tordown/internal/torrent"
 )
 
@@ -21,19 +24,27 @@ func main() {
 	sslCert := os.Getenv("TORDOWN_SSL_CERT")
 	sslKey := os.Getenv("TORDOWN_SSL_KEY")
 	domain := os.Getenv("TORDOWN_DOMAIN")
+	storageMode := envOrDefault("TORDOWN_STORAGE_MODE", "local")
+
+	tgAPIID, _ := strconv.Atoi(os.Getenv("TORDOWN_TELEGRAM_API_ID"))
+	tgAPIHash := os.Getenv("TORDOWN_TELEGRAM_API_HASH")
+
+	var tgClient *telegram.Client
+	if tgAPIID != 0 && tgAPIHash != "" {
+		tgClient = telegram.NewClient(tgAPIID, tgAPIHash, filepath.Join(downloadDir, ".telegram"))
+	}
 
 	mgr, err := torrent.NewManager(context.Background(), torrent.Config{
-		DownloadDir: downloadDir,
+		DownloadDir:    downloadDir,
+		StorageMode:    storageMode,
+		TelegramClient: tgClient,
 	})
-	if err != nil {
-		log.Fatalf("failed to initialize torrent manager: %v", err)
-	}
-	defer mgr.Close()
 
 	h, err := server.NewHTTPServer(server.Config{
-		Manager:     mgr,
-		StaticDir:   "web",
-		DownloadDir: downloadDir,
+		Manager:        mgr,
+		TelegramClient: tgClient,
+		StaticDir:      "web",
+		DownloadDir:    downloadDir,
 	})
 	if err != nil {
 		log.Fatalf("failed to create http server: %v", err)

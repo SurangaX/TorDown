@@ -97,6 +97,7 @@ The script automatically handles everything and preserves your settings!
 - **ZIP prepare progress** - live percent, processed size, and ETA shown while archive is being built
 - **Dark mode / Light mode** - automatic theme support with persistent user preference
 - **HTTPS/SSL with Let's Encrypt** - automatic HTTP → HTTPS redirect, production-ready certificate management
+- **Telegram Cloud Storage (New!)** - Stream torrents directly to Telegram's "Saved Messages" without using local disk space.
 - **Modern UI icons** - clean SVG icons for theme toggle, refresh, and ZIP download actions
 - Session overview panel with live stats plus an interactive details drawer
 - Static HTML/JS frontend with automatic polling (no external dependencies)
@@ -191,6 +192,9 @@ Environment variables:
 | `TORDOWN_DOMAIN` | (none) | Domain name for HTTP → HTTPS redirect (e.g., `example.duckdns.org`) |
 | `TORDOWN_SSL_CERT` | (none) | Path to SSL certificate file (enables HTTPS) |
 | `TORDOWN_SSL_KEY` | (none) | Path to SSL private key file (enables HTTPS) |
+| `TORDOWN_STORAGE_MODE` | `local` | Storage backend: `local` or `telegram` |
+| `TORDOWN_TELEGRAM_API_ID` | (none) | Telegram API ID for cloud storage |
+| `TORDOWN_TELEGRAM_API_HASH` | (none) | Telegram API Hash for cloud storage |
 
 **HTTP vs HTTPS:**
 - **Without SSL variables:** Runs plain HTTP on configured port (default `:8080`)

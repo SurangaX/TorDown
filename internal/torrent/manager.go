@@ -287,12 +287,19 @@ func (m *Manager) awaitMetadata(ctx context.Context, t *atorrent.Torrent, infoHa
 }
 
 func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torrent, infoHash string) {
-    log.Printf("[Telegram] Starting completion watcher for torrent %s", infoHash)
+    log.Printf("[Telegram] Starting completion watcher for torrent %s (Mode: %s)", infoHash, m.storageMode)
+    
+    if m.tgClient == nil {
+        log.Printf("[Telegram] Error: Telegram client is nil for %s, upload will never happen", infoHash)
+        return
+    }
+
     // Wait for info first
     select {
     case <-t.GotInfo():
         log.Printf("[Telegram] Metadata received for %s", infoHash)
     case <-m.baseCtx.Done():
+        log.Printf("[Telegram] Watcher for %s stopped: base context cancelled", infoHash)
         return
     }
 
@@ -318,11 +325,14 @@ func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torr
         case <-ticker.C:
             completed, total := selectedOrAllBytes(t)
             if total > 0 {
-                // log.Printf("[Telegram] %s progress: %d/%d", infoHash, completed, total)
+                percent := float64(completed) / float64(total) * 100
+                log.Printf("[Telegram] %s progress: %.2f%% (%d/%d)", infoHash, percent, completed, total)
                 if completed >= total {
                     log.Printf("[Telegram] Torrent %s completed! Starting upload...", infoHash)
                     goto upload
                 }
+            } else {
+                log.Printf("[Telegram] %s: Waiting for file sizes (total is 0)", infoHash)
             }
         }
     }

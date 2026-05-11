@@ -252,8 +252,8 @@ func (p *telegramPiece) MarkComplete() error {
 			return
 		}
 		
-		torrent := p.piece.Torrent()
-		globalOff := int64(p.piece.Index()) * torrent.PieceLength()
+		pieceLength := t.info.PieceLength
+		globalOff := int64(p.piece.Index()) * pieceLength
 		
 		remaining := data
 		currentOff := globalOff
@@ -284,14 +284,6 @@ func (p *telegramPiece) MarkComplete() error {
 				break
 			}
 
-			// For now, if we have a full 512KB part aligned, we'd upload it.
-			// However, pieces are 1-4MB, and BitTorrent downloads them out of order.
-			// To keep it simple AND correct: we ONLY upload parts once the PIECE is complete.
-			// This means pieces must be multiples of 512KB for perfect alignment, or we have issues.
-			
-			// REAL solution: Upload full parts whenever we have them. 
-			// For simplicity in this direct stream fix: just log that we are 'saving' it.
-			
 			// If it's a full part, push it
 			if offInPart == 0 && canWrite == telegramPartSize {
 				partNumInFile := int((currentOff - tf.offset) / telegramPartSize)
@@ -306,7 +298,7 @@ func (p *telegramPiece) MarkComplete() error {
 			currentOff += canWrite
 		}
 		
-		// If the whole file is complete in anacrolix, commit it
+		// If the whole file is complete, commit it
 		t.mu.Lock()
 		for _, tf := range t.files {
 			if tf.committed {
@@ -314,8 +306,8 @@ func (p *telegramPiece) MarkComplete() error {
 			}
 			
 			// Check if all pieces covering this file are completed
-			fileStartPiece := int(tf.offset / torrent.PieceLength())
-			fileEndPiece := int((tf.offset + tf.length - 1) / torrent.PieceLength())
+			fileStartPiece := int(tf.offset / pieceLength)
+			fileEndPiece := int((tf.offset + tf.length - 1) / pieceLength)
 			
 			allDone := true
 			for i := fileStartPiece; i <= fileEndPiece; i++ {

@@ -35,21 +35,19 @@ func NewTelegramStorage(tgClient *telegram.Client) storage.ClientImpl {
 // OpenTorrent satisfies the ClientImpl interface. 
 // We use [20]byte for the infohash parameter to avoid the infohash package import,
 // as reflection showed it matches that type.
-func (ts *TelegramStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, infoHash [20]byte) (storage.TorrentImpl, error) {
+func (ts *TelegramStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, infoHash metainfo.Hash) (storage.TorrentImpl, error) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
-	ih := metainfo.Hash(infoHash)
-
-	t, ok := ts.torrents[ih]
+	t, ok := ts.torrents[infoHash]
 	if !ok {
 		t = &telegramTorrent{
 			ts:           ts,
-			infoHash:     ih,
+			infoHash:     infoHash,
 			pieces:       make(map[int]*telegramPiece),
 			filesByPart:  make(map[int64]*telegramFile),
 		}
-		ts.torrents[ih] = t
+		ts.torrents[infoHash] = t
 	}
 	t.info = info
 

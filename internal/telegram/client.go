@@ -150,7 +150,7 @@ func (c *Client) SignIn(ctx context.Context, code string) (bool, string, error) 
 	_, err := c.client.Auth().SignIn(ctx, phone, code, phoneCodeHash)
 	if err != nil {
 		// Check for 2FA requirement
-		if tg.IsError(err, "SESSION_PASSWORD_NEEDED") {
+		if errors.Is(err, auth.ErrPasswordAuthNeeded) {
 			return false, "password_required", nil
 		}
 		return false, "", err

@@ -18,8 +18,8 @@ import (
 
     atorrent "github.com/anacrolix/torrent"
     "github.com/anacrolix/torrent/metainfo"
-    tstorage "tordown/internal/storage"
     "tordown/internal/telegram"
+    "tordown/internal/tstorage"
 )
 const maxTorrentFileSize = 20 << 20 // 20 MiB safeguard when fetching remote torrent files
 

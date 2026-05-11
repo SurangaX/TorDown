@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/anacrolix/torrent/metainfo"
@@ -31,6 +32,7 @@ func NewTelegramStorage(tgClient *telegram.Client) *TelegramStorage {
 	}
 }
 
+// OpenTorrent satisfies storage.ClientImpl
 func (ts *TelegramStorage) OpenTorrent(info *metainfo.Info, infoHash metainfo.Hash) (storage.TorrentImpl, error) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -51,6 +53,7 @@ func (ts *TelegramStorage) OpenTorrent(info *metainfo.Info, infoHash metainfo.Ha
 	return t, nil
 }
 
+// Close satisfies storage.ClientImpl
 func (ts *TelegramStorage) Close() error {
 	return nil
 }
@@ -94,7 +97,7 @@ func (t *telegramTorrent) initFiles() {
 
 		tf := &telegramFile{
 			id:            id,
-			name:          f.DisplayPath(t.info),
+			name:          strings.Join(f.Path, "/"),
 			offset:        currentOffset,
 			length:        f.Length,
 			totalParts:    int((f.Length + telegramPartSize - 1) / telegramPartSize),
@@ -145,7 +148,7 @@ func (t *telegramTorrent) commitFile(tf *telegramFile) error {
 	var randomID int64
 	binary.Read(rand.Reader, binary.LittleEndian, &randomID)
 
-	updates, err := raw.MessagesSendMedia(context.Background(), &tg.MessagesSendMediaRequest{
+	resp, err := raw.MessagesSendMedia(context.Background(), &tg.MessagesSendMediaRequest{
 		Peer: &tg.InputPeerSelf{},
 		Media: &tg.InputMediaUploadedDocument{
 			File: &tg.InputFileBig{
@@ -164,7 +167,7 @@ func (t *telegramTorrent) commitFile(tf *telegramFile) error {
 	if err == nil {
 		tf.committed = true
 		// Store the document info if returned
-		if u, ok := updates.(*tg.Updates); ok {
+		if u, ok := resp.(*tg.Updates); ok {
 			for _, m := range u.Updates {
 				if nm, ok := m.(*tg.UpdateNewMessage); ok {
 					if msg, ok := nm.Message.(*tg.Message); ok {
@@ -181,14 +184,17 @@ func (t *telegramTorrent) commitFile(tf *telegramFile) error {
 	return err
 }
 
+// Close satisfies storage.TorrentImpl
 func (t *telegramTorrent) Close() error {
 	return nil
 }
 
+// Drop satisfies storage.TorrentImpl (some versions of the library)
 func (t *telegramTorrent) Drop() error {
 	return nil
 }
 
+// Piece satisfies storage.TorrentImpl
 func (t *telegramTorrent) Piece(p metainfo.Piece) storage.PieceImpl {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -210,10 +216,12 @@ type telegramPiece struct {
 	piece metainfo.Piece
 }
 
+// ReadAt satisfies storage.PieceImpl (embedded io.ReaderAt)
 func (p *telegramPiece) ReadAt(b []byte, off int64) (n int, err error) {
 	return 0, io.EOF
 }
 
+// WriteAt satisfies storage.PieceImpl (embedded io.WriterAt)
 func (p *telegramPiece) WriteAt(b []byte, off int64) (n int, err error) {
 	t := p.t
 	if t.info == nil {
@@ -265,14 +273,17 @@ func (p *telegramPiece) WriteAt(b []byte, off int64) (n int, err error) {
 	return len(b), nil
 }
 
+// MarkComplete satisfies storage.PieceImpl
 func (p *telegramPiece) MarkComplete() error {
 	return nil
 }
 
+// MarkNotComplete satisfies storage.PieceImpl
 func (p *telegramPiece) MarkNotComplete() error {
 	return nil
 }
 
+// Completion satisfies storage.PieceImpl
 func (p *telegramPiece) Completion() storage.Completion {
 	return storage.Completion{
 		Complete: false,

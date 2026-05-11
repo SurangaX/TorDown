@@ -115,7 +115,7 @@ func NewManager(ctx context.Context, cfg Config) (*Manager, error) {
     }
 
     if cfg.StorageMode == "telegram" && cfg.TelegramClient != nil {
-        clientCfg.DefaultStorage = tstorage.NewTelegramStorage(cfg.TelegramClient)
+        clientCfg.DefaultStorage = tstorage.NewTelegramStorage(cfg.TelegramClient, absDir)
     }
 
     client, err := atorrent.NewClient(clientCfg)
@@ -377,12 +377,15 @@ func (m *Manager) RemoveTorrent(infoHash string, deleteData bool) error {
     normalized := normalizeInfoHash(infoHash)
     t, err := m.findTorrent(normalized)
     if err != nil {
-        return err
+        return nil // Already gone or never existed, don't return 500
     }
 
     name := safeName(t.Name(), normalized)
     removeTargets := make([]string, 0, 4)
-    if deleteData {
+    
+    // Only attempt disk deletion if we are in local mode
+    // We don't have a reliable way to 'delete' from Telegram messages easily here
+    if deleteData && !strings.Contains(m.client.Config().DefaultStorage.(interface{}). (string), "Telegram") {
         removeTargets = append(removeTargets, filepath.Join(m.downloadDir, filepath.FromSlash(name)))
 
         // Capture per-file paths before dropping the torrent so single-file layouts are cleaned too.

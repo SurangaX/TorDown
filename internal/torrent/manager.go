@@ -73,6 +73,7 @@ type persistedTorrent struct {
 type Manager struct {
     client      *atorrent.Client
     downloadDir string
+    storageMode string
     baseCtx     context.Context
     httpClient  *http.Client
 
@@ -135,6 +136,7 @@ func NewManager(ctx context.Context, cfg Config) (*Manager, error) {
     mgr := &Manager{
         client:            client,
         downloadDir:       absDir,
+        storageMode:       cfg.StorageMode,
         baseCtx:           ctx,
         httpClient:        httpClient,
         paused:            make(map[string]struct{}),
@@ -385,7 +387,7 @@ func (m *Manager) RemoveTorrent(infoHash string, deleteData bool) error {
     
     // Only attempt disk deletion if we are in local mode
     // We don't have a reliable way to 'delete' from Telegram messages easily here
-    if deleteData && !strings.Contains(m.client.Config().DefaultStorage.(interface{}). (string), "Telegram") {
+    if deleteData && m.storageMode != "telegram" {
         removeTargets = append(removeTargets, filepath.Join(m.downloadDir, filepath.FromSlash(name)))
 
         // Capture per-file paths before dropping the torrent so single-file layouts are cleaned too.

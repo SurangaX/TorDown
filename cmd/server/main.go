@@ -32,6 +32,11 @@ func main() {
 	var tgClient *telegram.Client
 	if tgAPIID != 0 && tgAPIHash != "" {
 		tgClient = telegram.NewClient(tgAPIID, tgAPIHash, filepath.Join(downloadDir, ".telegram"))
+		// Ensure the Telegram client is connected before using it for storage
+		if err := tgClient.EnsureConnected(context.Background()); err != nil {
+			log.Printf("warning: failed to connect telegram client: %v (downloads will use local storage)", err)
+			tgClient = nil
+		}
 	}
 
 	mgr, err := torrent.NewManager(context.Background(), torrent.Config{

@@ -19,7 +19,6 @@ import (
     atorrent "github.com/anacrolix/torrent"
     "github.com/anacrolix/torrent/metainfo"
     "tordown/internal/telegram"
-    "tordown/internal/tstorage"
 )
 const maxTorrentFileSize = 20 << 20 // 20 MiB safeguard when fetching remote torrent files
 
@@ -67,6 +66,7 @@ type persistedTorrent struct {
     HasSelection  bool      `json:"hasSelection"`
     Paused        bool      `json:"paused"`
     AddedAt       time.Time `json:"addedAt"`
+    CloudUploaded bool      `json:"cloudUploaded,omitempty"`
 }
 
 // Manager coordinates torrent lifecycle operations around an anacrolix client.
@@ -74,6 +74,7 @@ type Manager struct {
     client      *atorrent.Client
     downloadDir string
     storageMode string
+    tgClient    *telegram.Client
     baseCtx     context.Context
     httpClient  *http.Client
 
@@ -115,10 +116,6 @@ func NewManager(ctx context.Context, cfg Config) (*Manager, error) {
         clientCfg.ListenPort = cfg.ListenPort
     }
 
-    if cfg.StorageMode == "telegram" && cfg.TelegramClient != nil {
-        clientCfg.DefaultStorage = tstorage.NewTelegramStorage(cfg.TelegramClient, absDir)
-    }
-
     client, err := atorrent.NewClient(clientCfg)
     if err != nil {
         return nil, err
@@ -137,6 +134,7 @@ func NewManager(ctx context.Context, cfg Config) (*Manager, error) {
         client:            client,
         downloadDir:       absDir,
         storageMode:       cfg.StorageMode,
+        tgClient:          cfg.TelegramClient,
         baseCtx:           ctx,
         httpClient:        httpClient,
         paused:            make(map[string]struct{}),
@@ -265,6 +263,10 @@ func (m *Manager) initializeTorrent(ctx context.Context, t *atorrent.Torrent, op
 
     go m.awaitMetadata(ctx, t, infoHash, selection)
 
+    if m.storageMode == "telegram" && m.tgClient != nil {
+        go m.awaitCompletionAndUpload(ctx, t, infoHash)
+    }
+
     return m.buildSummary(t)
 }
 
@@ -280,6 +282,87 @@ func (m *Manager) awaitMetadata(ctx context.Context, t *atorrent.Torrent, infoHa
     case <-t.GotInfo():
         m.applySelection(t, infoHash, selection)
     case <-downloadCtx.Done():
+    }
+}
+
+func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torrent, infoHash string) {
+    // Wait for info first
+    select {
+    case <-t.GotInfo():
+    case <-m.baseCtx.Done():
+        return
+    }
+
+    // Check if already uploaded
+    key := normalizeInfoHash(infoHash)
+    m.persistMu.Lock()
+    state, ok := m.state[key]
+    if ok && state.CloudUploaded {
+        m.persistMu.Unlock()
+        return
+    }
+    m.persistMu.Unlock()
+
+    // Periodically check for completion
+    ticker := time.NewTicker(5 * time.Second)
+    defer ticker.Stop()
+
+    for {
+        select {
+        case <-m.baseCtx.Done():
+            return
+        case <-ticker.C:
+            completed, total := selectedOrAllBytes(t)
+            if completed >= total && total > 0 {
+                // Completed!
+                goto upload
+            }
+        }
+    }
+
+upload:
+    // Ensure metadata is available (redundant but safe)
+    info := t.Info()
+    if info == nil {
+        return
+    }
+
+    // Upload files
+    files := t.Files()
+    for _, f := range files {
+        // Only upload files that were actually downloaded (if a selection was made)
+        if f.Priority() == atorrent.PiecePriorityNone {
+            continue
+        }
+
+        path := filepath.Join(m.downloadDir, f.Path())
+        // Upload to telegram
+        err := m.tgClient.UploadFile(m.baseCtx, path, filepath.Base(path))
+        if err != nil {
+            // Log error and maybe retry later? For now, we stop.
+            return
+        }
+    }
+
+    // Success! Update state
+    m.persistMu.Lock()
+    entry, ok := m.state[key]
+    if ok {
+        entry.CloudUploaded = true
+        entry.Paused = true
+        m.state[key] = entry
+        m.saveStateLocked()
+    }
+    m.persistMu.Unlock()
+
+    // Pause the torrent
+    t.DisallowDataDownload()
+    
+    // Delete local files manually to keep the torrent in the UI
+    name := safeName(t.Name(), key)
+    os.RemoveAll(filepath.Join(m.downloadDir, filepath.FromSlash(name)))
+    for _, f := range t.Files() {
+        os.Remove(filepath.Join(m.downloadDir, filepath.FromSlash(f.Path())))
     }
 }
 
@@ -385,9 +468,9 @@ func (m *Manager) RemoveTorrent(infoHash string, deleteData bool) error {
     name := safeName(t.Name(), normalized)
     removeTargets := make([]string, 0, 4)
     
-    // Only attempt disk deletion if we are in local mode
-    // We don't have a reliable way to 'delete' from Telegram messages easily here
-    if deleteData && m.storageMode != "telegram" {
+    // Only attempt disk deletion if we want to delete data.
+    // In the new telegram flow, we download locally first, so we should allow deletion.
+    if deleteData {
         removeTargets = append(removeTargets, filepath.Join(m.downloadDir, filepath.FromSlash(name)))
 
         // Capture per-file paths before dropping the torrent so single-file layouts are cleaned too.
@@ -975,6 +1058,16 @@ func (m *Manager) buildSummary(t *atorrent.Torrent) TorrentSummary {
     createdAt := m.created[key]
     m.mu.RUnlock()
 
+    m.persistMu.Lock()
+    state, ok := m.state[key]
+    m.persistMu.Unlock()
+
+    if ok && state.CloudUploaded {
+        bytesCompleted = total
+        percent = 100
+        bytesMissing = 0
+    }
+
     downloadRate, uploadRate := m.computeRates(key, stats)
     var etaSeconds int64
     if downloadRate > 0 && bytesMissing > 0 {
@@ -982,6 +1075,10 @@ func (m *Manager) buildSummary(t *atorrent.Torrent) TorrentSummary {
     }
 
     status := m.deriveStatus(t, paused, bytesCompleted, total, stats)
+    if ok && state.CloudUploaded {
+        status = "cloud"
+        paused = true
+    }
 
     return TorrentSummary{
         InfoHash:        infoHash,

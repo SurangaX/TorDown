@@ -286,9 +286,11 @@ func (m *Manager) awaitMetadata(ctx context.Context, t *atorrent.Torrent, infoHa
 }
 
 func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torrent, infoHash string) {
+    log.Printf("[Telegram] Starting completion watcher for torrent %s", infoHash)
     // Wait for info first
     select {
     case <-t.GotInfo():
+        log.Printf("[Telegram] Metadata received for %s", infoHash)
     case <-m.baseCtx.Done():
         return
     }
@@ -298,13 +300,14 @@ func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torr
     m.persistMu.Lock()
     state, ok := m.state[key]
     if ok && state.CloudUploaded {
+        log.Printf("[Telegram] Torrent %s already marked as uploaded, skipping", infoHash)
         m.persistMu.Unlock()
         return
     }
     m.persistMu.Unlock()
 
     // Periodically check for completion
-    ticker := time.NewTicker(5 * time.Second)
+    ticker := time.NewTicker(10 * time.Second)
     defer ticker.Stop()
 
     for {
@@ -313,9 +316,12 @@ func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torr
             return
         case <-ticker.C:
             completed, total := selectedOrAllBytes(t)
-            if completed >= total && total > 0 {
-                // Completed!
-                goto upload
+            if total > 0 {
+                // log.Printf("[Telegram] %s progress: %d/%d", infoHash, completed, total)
+                if completed >= total {
+                    log.Printf("[Telegram] Torrent %s completed! Starting upload...", infoHash)
+                    goto upload
+                }
             }
         }
     }
@@ -324,27 +330,29 @@ upload:
     // Ensure metadata is available (redundant but safe)
     info := t.Info()
     if info == nil {
+        log.Printf("[Telegram] Error: Metadata lost for %s", infoHash)
         return
     }
 
     // Upload files
     files := t.Files()
     for _, f := range files {
-        // Only upload files that were actually downloaded (if a selection was made)
         if f.Priority() == atorrent.PiecePriorityNone {
             continue
         }
 
         path := filepath.Join(m.downloadDir, f.Path())
-        // Upload to telegram
+        log.Printf("[Telegram] Uploading file: %s", f.Path())
         err := m.tgClient.UploadFile(m.baseCtx, path, filepath.Base(path))
         if err != nil {
-            // Log error and maybe retry later? For now, we stop.
+            log.Printf("[Telegram] Upload failed for %s: %v", f.Path(), err)
             return
         }
+        log.Printf("[Telegram] Successfully uploaded %s", f.Path())
     }
 
     // Success! Update state
+    log.Printf("[Telegram] All files uploaded for %s. Updating state and cleaning up...", infoHash)
     m.persistMu.Lock()
     entry, ok := m.state[key]
     if ok {
@@ -360,10 +368,13 @@ upload:
     
     // Delete local files manually to keep the torrent in the UI
     name := safeName(t.Name(), key)
-    os.RemoveAll(filepath.Join(m.downloadDir, filepath.FromSlash(name)))
+    dataPath := filepath.Join(m.downloadDir, filepath.FromSlash(name))
+    log.Printf("[Telegram] Deleting local data at %s", dataPath)
+    os.RemoveAll(dataPath)
     for _, f := range t.Files() {
         os.Remove(filepath.Join(m.downloadDir, filepath.FromSlash(f.Path())))
     }
+    log.Printf("[Telegram] Cleanup finished for %s", infoHash)
 }
 
 func (m *Manager) applySelection(t *atorrent.Torrent, infoHash string, selection selectionOptions) {

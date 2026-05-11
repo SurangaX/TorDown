@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -19,7 +19,6 @@ import (
 )
 
 func main() {
-	fmt.Println(">>> TorDown Server Starting...")
 	addr := envOrDefault("TORDOWN_LISTEN_ADDR", ":443")
 	downloadDir := envOrDefault("TORDOWN_DOWNLOAD_DIR", "./downloads")
 	sslCert := os.Getenv("TORDOWN_SSL_CERT")
@@ -27,28 +26,20 @@ func main() {
 	domain := os.Getenv("TORDOWN_DOMAIN")
 	storageMode := envOrDefault("TORDOWN_STORAGE_MODE", "local")
 
-	fmt.Printf(">>> Config: Addr=%s, Dir=%s, Mode=%s\n", addr, downloadDir, storageMode)
-
 	tgAPIID, _ := strconv.Atoi(os.Getenv("TORDOWN_TELEGRAM_API_ID"))
 	tgAPIHash := os.Getenv("TORDOWN_TELEGRAM_API_HASH")
 
 	var tgClient *telegram.Client
 	if tgAPIID != 0 && tgAPIHash != "" {
-		fmt.Printf(">>> Initializing Telegram (API ID: %d)\n", tgAPIID)
+		log.Printf("Initializing Telegram client with API ID: %d", tgAPIID)
 		tgClient = telegram.NewClient(tgAPIID, tgAPIHash, filepath.Join(downloadDir, ".telegram"))
-		
-		// Ensure the Telegram client is connected with a timeout to prevent hanging
-		connectCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		
-		if err := tgClient.EnsureConnected(connectCtx); err != nil {
-			fmt.Printf(">>> Warning: Failed to connect Telegram: %v\n", err)
+		// Ensure the Telegram client is connected before using it for storage
+		if err := tgClient.EnsureConnected(context.Background()); err != nil {
+			log.Printf("WARNING: Telegram client connection failed: %v (using local storage)", err)
 			tgClient = nil
 		} else {
-			fmt.Println(">>> Telegram Connected Successfully")
+			log.Printf("INFO: Telegram client connected successfully")
 		}
-	} else {
-		fmt.Println(">>> Telegram API credentials not provided, skipping background auth")
 	}
 
 	mgr, err := torrent.NewManager(context.Background(), torrent.Config{
@@ -57,10 +48,8 @@ func main() {
 		TelegramClient: tgClient,
 	})
 	if err != nil {
-		fmt.Printf(">>> ERROR: Failed to create torrent manager: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("failed to create torrent manager: %v", err)
 	}
-	fmt.Println(">>> Torrent Manager Ready")
 
 	h, err := server.NewHTTPServer(server.Config{
 		Manager:        mgr,
@@ -69,8 +58,7 @@ func main() {
 		DownloadDir:    downloadDir,
 	})
 	if err != nil {
-		fmt.Printf(">>> ERROR: Failed to create http server: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("failed to create http server: %v", err)
 	}
 
 	srv := &http.Server{
@@ -93,11 +81,11 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
-			fmt.Printf(">>> Error shutting down main server: %v\n", err)
+			log.Printf("error shutting down main server: %v", err)
 		}
 		if redirectSrv != nil {
 			if err := redirectSrv.Shutdown(ctx); err != nil {
-				fmt.Printf(">>> Error shutting down redirect server: %v\n", err)
+				log.Printf("error shutting down redirect server: %v", err)
 			}
 		}
 	}()
@@ -140,23 +128,21 @@ func main() {
 		}
 
 		go func() {
-			fmt.Printf(">>> HTTP redirect server listening on :80\n")
+			log.Printf("HTTP redirect server listening on :80")
 			if err := redirectSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				fmt.Printf(">>> Redirect server error: %v\n", err)
+				log.Printf("redirect server error: %v", err)
 				serverErr <- err
 			}
 		}()
 
-		fmt.Printf(">>> Torrent web UI listening on %s (HTTPS)\n", addr)
+		log.Printf("torrent web UI listening on %s (HTTPS)", addr)
 		if err := srv.ListenAndServeTLS(sslCert, sslKey); err != nil && err != http.ErrServerClosed {
-			fmt.Printf(">>> ERROR: HTTPS server error: %v\n", err)
-			os.Exit(1)
+			log.Fatalf("https server error: %v", err)
 		}
 	} else {
-		fmt.Printf(">>> Torrent web UI listening on %s (HTTP)\n", addr)
+		log.Printf("torrent web UI listening on %s (HTTP)", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			fmt.Printf(">>> ERROR: HTTP server error: %v\n", err)
-			os.Exit(1)
+			log.Fatalf("http server error: %v", err)
 		}
 	}
 }

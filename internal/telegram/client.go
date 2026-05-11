@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -158,9 +159,9 @@ func (c *Client) RequestCode(ctx context.Context, phone string) (string, error) 
 // ExportQRToken requests a QR login token and returns the tg://login?token=... URL.
 func (c *Client) ExportQRToken(ctx context.Context) (string, error) {
 	resp, err := c.raw.AuthExportLoginToken(ctx, &tg.AuthExportLoginTokenRequest{
-		ApiID:      c.apiID,
-		ApiHash:    c.apiHash,
-		ExceptIds:  []int64{},
+		APIID:      c.apiID,
+		APIHash:    c.apiHash,
+		ExceptIDs:  []int64{},
 	})
 	if err != nil {
 		return "", err

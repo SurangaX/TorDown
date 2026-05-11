@@ -6,8 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"

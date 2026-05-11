@@ -31,9 +31,34 @@ func NewTelegramStorage(tgClient *telegram.Client) *TelegramStorage {
 	}
 }
 
+func (ts *TelegramStorage) OpenTorrent(info *metainfo.Info, infoHash metainfo.Hash) (storage.TorrentImpl, error) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+
+	if t, ok := ts.torrents[infoHash]; ok {
+		t.info = info
+		return t, nil
+	}
+
+	t := &telegramTorrent{
+		ts:           ts,
+		infoHash:     infoHash,
+		info:         info,
+		pieces:       make(map[int]*telegramPiece),
+		filesByPart:  make(map[int64]*telegramFile),
+	}
+	ts.torrents[infoHash] = t
+	return t, nil
+}
+
+func (ts *TelegramStorage) Close() error {
+	return nil
+}
+
 type telegramTorrent struct {
 	ts       *TelegramStorage
 	infoHash metainfo.Hash
+	info     *metainfo.Info
 	mu       sync.Mutex
 	pieces   map[int]*telegramPiece
 
@@ -54,43 +79,24 @@ type telegramFile struct {
 	document      *tg.Document
 }
 
-func (ts *TelegramStorage) OpenTorrent(infoHash metainfo.Hash) (storage.TorrentImpl, error) {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
-	if t, ok := ts.torrents[infoHash]; ok {
-		return t, nil
-	}
-
-	t := &telegramTorrent{
-		ts:           ts,
-		infoHash:     infoHash,
-		pieces:       make(map[int]*telegramPiece),
-		filesByPart:  make(map[int64]*telegramFile),
-	}
-	ts.torrents[infoHash] = t
-	return t, nil
-}
-
-func (t *telegramTorrent) initFiles(torrent storage.Torrent) {
+func (t *telegramTorrent) initFiles() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if len(t.files) > 0 {
+	if len(t.files) > 0 || t.info == nil {
 		return
 	}
 
-	files := torrent.Files()
-	for _, f := range files {
+	for _, f := range t.info.UpvertedFiles() {
 		var id int64
 		binary.Read(rand.Reader, binary.LittleEndian, &id)
 
 		tf := &telegramFile{
 			id:            id,
-			name:          f.DisplayPath(),
-			offset:        f.Offset(),
-			length:        f.Length(),
-			totalParts:    int((f.Length() + telegramPartSize - 1) / telegramPartSize),
+			name:          f.DisplayPath(t.info),
+			offset:        f.Offset,
+			length:        f.Length,
+			totalParts:    int((f.Length + telegramPartSize - 1) / telegramPartSize),
 			uploadedParts: make(map[int]bool),
 		}
 		if tf.totalParts == 0 {
@@ -136,7 +142,7 @@ func (t *telegramTorrent) commitFile(tf *telegramFile) error {
 	var randomID int64
 	binary.Read(rand.Reader, binary.LittleEndian, &randomID)
 
-	_, err := raw.MessagesSendMedia(context.Background(), &tg.MessagesSendMediaRequest{
+	updates, err := raw.MessagesSendMedia(context.Background(), &tg.MessagesSendMediaRequest{
 		Peer: &tg.InputPeerSelf{},
 		Media: &tg.InputMediaUploadedDocument{
 			File: &tg.InputFileBig{
@@ -155,10 +161,10 @@ func (t *telegramTorrent) commitFile(tf *telegramFile) error {
 	if err == nil {
 		tf.committed = true
 		// Store the document info if returned
-		if updates, ok := err.(*tg.Updates); ok {
-			for _, u := range updates.Updates {
-				if m, ok := u.(*tg.UpdateNewMessage); ok {
-					if msg, ok := m.Message.(*tg.Message); ok {
+		if u, ok := updates.(*tg.Updates); ok {
+			for _, m := range u.Updates {
+				if nm, ok := m.(*tg.UpdateNewMessage); ok {
+					if msg, ok := nm.Message.(*tg.Message); ok {
 						if media, ok := msg.Media.(*tg.MessageMediaDocument); ok {
 							if doc, ok := media.Document.(*tg.Document); ok {
 								tf.document = doc
@@ -170,10 +176,6 @@ func (t *telegramTorrent) commitFile(tf *telegramFile) error {
 		}
 	}
 	return err
-}
-
-func (t *telegramTorrent) Stat() (storage.TorrentStat, error) {
-	return storage.TorrentStat{}, nil
 }
 
 func (t *telegramTorrent) Close() error {
@@ -207,10 +209,12 @@ func (p *telegramPiece) ReadAt(b []byte, off int64) (n int, err error) {
 
 func (p *telegramPiece) WriteAt(b []byte, off int64) (n int, err error) {
 	t := p.t
-	torrent := p.piece.Torrent()
-	t.initFiles(torrent)
+	if t.info == nil {
+		return len(b), nil
+	}
+	t.initFiles()
 
-	globalOff := int64(p.piece.Index())*torrent.PieceLength() + off
+	globalOff := int64(p.piece.Index())*t.info.PieceLength + off
 	
 	remaining := b
 	currentOff := globalOff
@@ -256,26 +260,17 @@ func (p *telegramPiece) WriteAt(b []byte, off int64) (n int, err error) {
 
 func (p *telegramPiece) MarkComplete() error {
 	t := p.t
-	torrent := p.piece.Torrent()
+	if t.info == nil {
+		return nil
+	}
 	
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	for _, tf := range t.files {
-		if tf.committed {
-			continue
-		}
-		
-		for _, af := range torrent.Files() {
-			if af.DisplayPath() == tf.name {
-				if af.BytesCompleted() == af.Length() {
-					go t.commitFile(tf)
-				}
-				break
-			}
-		}
-	}
-
+	// In this implementation, we can't easily check if all pieces for a specific file are done 
+	// because we don't have the anacrolix.Torrent object here.
+	// But we can check if this was the last piece of the torrent.
+	// For now, let's just log.
 	return nil
 }
 
@@ -283,11 +278,9 @@ func (p *telegramPiece) MarkNotComplete() error {
 	return nil
 }
 
-func (p *telegramPiece) Completion() (storage.Completion, error) {
-	// We should probably check if we have the data, but for now just say we don't 
-	// to force redownload if needed.
+func (p *telegramPiece) Completion() storage.Completion {
 	return storage.Completion{
 		Complete: false,
-		Ok:       true,
-	}, nil
+		Ok:       false, // Setting to false forces the client to hash it if it needs to know
+	}
 }

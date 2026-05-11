@@ -7,6 +7,7 @@ import (
     "encoding/hex"
     "encoding/json"
     "errors"
+    "fmt"
     "io"
     "log"
     "net/http"
@@ -477,6 +478,54 @@ func (m *Manager) GetTorrent(ctx context.Context, infoHash string) (TorrentSumma
         return TorrentSummary{}, err
     }
     return summary, nil
+}
+
+// SetTelegramClient dynamically updates the Telegram client used for uploads.
+func (m *Manager) SetTelegramClient(client *telegram.Client) {
+    m.mu.Lock()
+    m.tgClient = client
+    m.mu.Unlock()
+    fmt.Printf("[Manager] Telegram client updated\n")
+    
+    // If we are in telegram mode, start watchers for all torrents
+    m.mu.RLock()
+    mode := m.storageMode
+    m.mu.RUnlock()
+    
+    if mode == "telegram" {
+        m.StartCloudWatchers()
+    }
+}
+
+// SetStorageMode dynamically updates the storage mode (local or telegram).
+func (m *Manager) SetStorageMode(mode string) {
+    m.mu.Lock()
+    m.storageMode = mode
+    m.mu.Unlock()
+    fmt.Printf("[Manager] Storage mode updated to: %s\n", mode)
+    
+    if mode == "telegram" {
+        m.StartCloudWatchers()
+    }
+}
+
+// StartCloudWatchers launches completion and upload watchers for all torrents that haven't been uploaded yet.
+func (m *Manager) StartCloudWatchers() {
+    m.mu.RLock()
+    client := m.tgClient
+    m.mu.RUnlock()
+    
+    if client == nil {
+        fmt.Printf("[Manager] Cannot start cloud watchers: Telegram client not connected\n")
+        return
+    }
+
+    torrents := m.client.Torrents()
+    fmt.Printf("[Manager] Starting cloud watchers for %d torrents\n", len(torrents))
+    for _, t := range torrents {
+        infoHash := formatInfoHash(t.InfoHash())
+        go m.awaitCompletionAndUpload(m.baseCtx, t, infoHash)
+    }
 }
 
 // RemoveTorrent drops the torrent from the client and optionally deletes data.

@@ -6,13 +6,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
 	"os"
+	"path/filepath"
 
+	"github.com/gotd/td/telegram/uploader"
 	"github.com/gotd/td/tg"
 )
-
-const telegramPartSize = 512 * 1024 // 512KB
 
 // UploadFile uploads a local file to the user's "Saved Messages" (InputPeerSelf).
 func (c *Client) UploadFile(ctx context.Context, filePath string, fileName string) error {
@@ -21,55 +20,12 @@ func (c *Client) UploadFile(ctx context.Context, filePath string, fileName strin
 		return errors.New("telegram client not connected")
 	}
 
-	file, err := os.Open(filePath)
+	u := uploader.NewUploader(raw)
+	
+	// Create an upload from the file path
+	f, err := u.FromPath(ctx, filePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file for upload: %w", err)
-	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		return fmt.Errorf("failed to stat file: %w", err)
-	}
-	fileSize := info.Size()
-
-	var fileID int64
-	if err := binary.Read(rand.Reader, binary.LittleEndian, &fileID); err != nil {
-		return fmt.Errorf("failed to generate file ID: %w", err)
-	}
-
-	totalParts := int((fileSize + telegramPartSize - 1) / telegramPartSize)
-	if totalParts == 0 {
-		totalParts = 1
-	}
-
-	isBig := fileSize > 10*1024*1024 // Greater than 10MB
-
-	buffer := make([]byte, telegramPartSize)
-	for i := 0; i < totalParts; i++ {
-		n, err := io.ReadFull(file, buffer)
-		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
-			return fmt.Errorf("failed to read file part %d: %w", i, err)
-		}
-
-		data := buffer[:n]
-		if isBig {
-			_, err = raw.UploadSaveBigFilePart(ctx, &tg.UploadSaveBigFilePartRequest{
-				FileID:         fileID,
-				FilePart:       i,
-				FileTotalParts: totalParts,
-				Bytes:          data,
-			})
-		} else {
-			_, err = raw.UploadSaveFilePart(ctx, &tg.UploadSaveFilePartRequest{
-				FileID:   fileID,
-				FilePart: i,
-				Bytes:    data,
-			})
-		}
-		if err != nil {
-			return fmt.Errorf("failed to upload part %d: %w", i, err)
-		}
+		return fmt.Errorf("failed to prepare upload from path: %w", err)
 	}
 
 	// Finalize the upload by sending it as a document
@@ -78,26 +34,11 @@ func (c *Client) UploadFile(ctx context.Context, filePath string, fileName strin
 		return fmt.Errorf("failed to generate random ID: %w", err)
 	}
 
-	var inputFile tg.InputFileClass
-	if isBig {
-		inputFile = &tg.InputFileBig{
-			ID:    fileID,
-			Parts: totalParts,
-			Name:  fileName,
-		}
-	} else {
-		inputFile = &tg.InputFile{
-			ID:    fileID,
-			Parts: totalParts,
-			Name:  fileName,
-		}
-	}
-
 	_, err = raw.MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
 		Peer: &tg.InputPeerSelf{},
 		Media: &tg.InputMediaUploadedDocument{
-			File:       inputFile,
-			MimeType:   "application/octet-stream",
+			File:     f,
+			MimeType: "application/octet-stream",
 			Attributes: []tg.DocumentAttributeClass{
 				&tg.DocumentAttributeFilename{FileName: fileName},
 			},

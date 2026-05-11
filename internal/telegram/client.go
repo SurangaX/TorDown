@@ -155,6 +155,42 @@ func (c *Client) RequestCode(ctx context.Context, phone string) (string, error) 
 	return "code_sent", nil
 }
 
+// ExportQRToken requests a QR login token and returns the tg://login?token=... URL.
+func (c *Client) ExportQRToken(ctx context.Context) (string, error) {
+	resp, err := c.raw.AuthExportLoginToken(ctx, &tg.AuthExportLoginTokenRequest{
+		ApiID:      c.apiID,
+		ApiHash:    c.apiHash,
+		ExceptIds:  []int64{},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	switch t := resp.(type) {
+	case *tg.AuthLoginToken:
+		// Encode token as URL safe base64 without padding
+		encoded := base64.RawURLEncoding.EncodeToString(t.Token)
+		return fmt.Sprintf("tg://login?token=%s", encoded), nil
+	case *tg.AuthLoginTokenSuccess:
+		return "authorized", nil
+	case *tg.AuthLoginTokenMigrateTo:
+		// Handle migration if needed, but for now just return the token
+		encoded := base64.RawURLEncoding.EncodeToString(t.Token)
+		return fmt.Sprintf("tg://login?token=%s", encoded), nil
+	default:
+		return "", fmt.Errorf("unexpected login token type: %T", resp)
+	}
+}
+
+// CheckQRStatus checks if the QR login has been completed.
+func (c *Client) CheckQRStatus(ctx context.Context) (bool, error) {
+	status, err := c.client.Auth().Status(ctx)
+	if err != nil {
+		return false, err
+	}
+	return status.Authorized, nil
+}
+
 // SignIn completes the authentication with the received code.
 func (c *Client) SignIn(ctx context.Context, code string) (bool, string, error) {
 	c.mu.Lock()

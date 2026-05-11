@@ -46,9 +46,19 @@
         <div class="form-group-vertical">
           <input type="number" id="tg-api-id" class="form-input" placeholder="API ID" required>
           <input type="text" id="tg-api-hash" class="form-input" placeholder="API Hash" required>
-          <button type="submit" class="btn-primary">Connect</button>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Connect</button>
+            <button type="button" id="tg-qr-btn" class="btn-secondary">QR Login</button>
+          </div>
         </div>
       </form>
+
+      <!-- QR Code Container -->
+      <div id="tg-qr-container" class="telegram-form qr-container" hidden>
+        <p class="form-help">Scan this QR code with your Telegram app to login.</p>
+        <div id="tg-qr-code" class="qr-code"></div>
+        <button type="button" id="tg-qr-cancel-btn" class="btn-secondary">Cancel</button>
+      </div>
 
       <!-- Login Form (Phone) -->
       <form id="telegram-login-form" class="telegram-form" hidden>
@@ -351,6 +361,7 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <script src="/app.js" defer></script>
 </body>
 </html>

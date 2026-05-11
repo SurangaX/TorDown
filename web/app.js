@@ -88,6 +88,10 @@ document.addEventListener("DOMContentLoaded", () => {
   elements.tgLoginForm = document.getElementById("telegram-login-form");
   elements.tgVerifyForm = document.getElementById("telegram-verify-form");
   elements.tgPasswordForm = document.getElementById("telegram-password-form");
+  elements.tgQRBtn = document.getElementById("tg-qr-btn");
+  elements.tgQRContainer = document.getElementById("tg-qr-container");
+  elements.tgQRCode = document.getElementById("tg-qr-code");
+  elements.tgQRCancelBtn = document.getElementById("tg-qr-cancel-btn");
   elements.tgApiIdInput = document.getElementById("tg-api-id");
   elements.tgApiHashInput = document.getElementById("tg-api-hash");
   elements.tgPhoneInput = document.getElementById("tg-phone");
@@ -141,6 +145,8 @@ document.addEventListener("DOMContentLoaded", () => {
   elements.tgVerifyForm.addEventListener("submit", onTelegramSignInSubmit);
   elements.tgPasswordForm.addEventListener("submit", onTelegramCheckPasswordSubmit);
   elements.tgLogoutBtn.addEventListener("click", onTelegramLogoutClick);
+  elements.tgQRBtn.addEventListener("click", onTelegramQRLoginClick);
+  elements.tgQRCancelBtn.addEventListener("click", onTelegramQRCancelClick);
 
   elements.magnetInput.addEventListener("input", syncSourceInputs);
   elements.torrentUrlInput.addEventListener("input", syncSourceInputs);
@@ -1381,5 +1387,79 @@ async function onTelegramLogoutClick() {
     await checkTelegramStatus();
   } catch (error) {
     showMessage(error.message, true);
+  }
+}
+
+let qrPollInterval = null;
+
+async function onTelegramQRLoginClick() {
+  const apiId = elements.tgApiIdInput.value;
+  const apiHash = elements.tgApiHashInput.value;
+
+  if (!apiId || !apiHash) {
+    showMessage("API ID and API Hash are required for QR login", true);
+    return;
+  }
+
+  try {
+    // First connect to initialize the client with these credentials
+    await apiRequest("POST", `${API_BASE}/telegram/connect`, { apiId, apiHash });
+    
+    // Now request QR URL
+    const { payload } = await apiRequest("POST", `${API_BASE}/telegram/qr/login`);
+    
+    if (payload.url === "authorized") {
+      showMessage("Already authorized", false);
+      await checkTelegramStatus();
+      return;
+    }
+
+    // Show QR container
+    elements.tgConnectForm.hidden = true;
+    elements.tgQRContainer.hidden = false;
+    elements.tgQRCode.innerHTML = "";
+    
+    new QRCode(elements.tgQRCode, {
+      text: payload.url,
+      width: 256,
+      height: 256
+    });
+
+    // Start polling
+    startQRPolling();
+  } catch (error) {
+    console.error("QR Login failed:", error);
+    showMessage("Failed to generate QR code: " + error.message, true);
+  }
+}
+
+function onTelegramQRCancelClick() {
+  stopQRPolling();
+  elements.tgQRContainer.hidden = true;
+  elements.tgConnectForm.hidden = false;
+}
+
+function startQRPolling() {
+  if (qrPollInterval) clearInterval(qrPollInterval);
+  qrPollInterval = setInterval(async () => {
+    try {
+      const { payload } = await apiRequest("GET", `${API_BASE}/telegram/qr/poll`);
+      if (payload.authenticated) {
+        stopQRPolling();
+        elements.tgQRContainer.hidden = true;
+        showMessage("Successfully logged in via QR!", false);
+        await checkTelegramStatus();
+      }
+    } catch (error) {
+      console.error("QR Poll failed:", error);
+      stopQRPolling();
+    }
+  }, 3000);
+}
+
+function stopQRPolling() {
+  if (qrPollInterval) {
+    clearInterval(qrPollInterval);
+    qrPollInterval = null;
   }
 }

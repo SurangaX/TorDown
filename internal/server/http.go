@@ -110,6 +110,8 @@ func (s *httpServer) mountAPI(r chi.Router) {
         r.Post("/sign-in", s.handleTelegramSignIn)
         r.Post("/check-password", s.handleTelegramCheckPassword)
         r.Post("/logout", s.handleTelegramLogout)
+        r.Post("/qr/login", s.handleTelegramQRLogin)
+        r.Get("/qr/poll", s.handleTelegramQRPoll)
     })
 
     r.Route("/torrents/{infoHash}", func(r chi.Router) {
@@ -1010,7 +1012,8 @@ func (s *httpServer) handleTelegramConnect(w http.ResponseWriter, r *http.Reques
     }
 
     s.telegramClient = telegram.NewClient(payload.APIID, payload.APIHash, filepath.Join(s.downloadDir, ".telegram"))
-    
+    s.manager.SetTelegramClient(s.telegramClient)
+
     if err := s.telegramClient.EnsureConnected(r.Context()); err != nil {
         respondError(w, err)
         return
@@ -1018,7 +1021,6 @@ func (s *httpServer) handleTelegramConnect(w http.ResponseWriter, r *http.Reques
 
     respondJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
-
 func (s *httpServer) handleTelegramCheck(w http.ResponseWriter, r *http.Request) {
     if s.telegramClient == nil {
         respondJSON(w, http.StatusOK, map[string]interface{}{"authenticated": false, "initialized": false})
@@ -1078,6 +1080,10 @@ func (s *httpServer) handleTelegramSignIn(w http.ResponseWriter, r *http.Request
         return
     }
 
+    if success {
+        s.manager.SetTelegramClient(s.telegramClient)
+    }
+
     respondJSON(w, http.StatusOK, map[string]interface{}{
         "success": success,
         "next":    next,
@@ -1102,6 +1108,10 @@ func (s *httpServer) handleTelegramCheckPassword(w http.ResponseWriter, r *http.
         return
     }
 
+    if success {
+        s.manager.SetTelegramClient(s.telegramClient)
+    }
+
     respondJSON(w, http.StatusOK, map[string]bool{"success": success})
 }
 
@@ -1117,4 +1127,38 @@ func (s *httpServer) handleTelegramLogout(w http.ResponseWriter, r *http.Request
     }
 
     respondJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (s *httpServer) handleTelegramQRLogin(w http.ResponseWriter, r *http.Request) {
+    if s.telegramClient == nil {
+        respondError(w, errors.New("telegram client not initialized"))
+        return
+    }
+
+    url, err := s.telegramClient.ExportQRToken(r.Context())
+    if err != nil {
+        respondError(w, err)
+        return
+    }
+
+    respondJSON(w, http.StatusOK, map[string]string{"url": url})
+}
+
+func (s *httpServer) handleTelegramQRPoll(w http.ResponseWriter, r *http.Request) {
+    if s.telegramClient == nil {
+        respondError(w, errors.New("telegram client not initialized"))
+        return
+    }
+
+    auth, err := s.telegramClient.CheckQRStatus(r.Context())
+    if err != nil {
+        respondError(w, err)
+        return
+    }
+
+    if auth {
+        s.manager.SetTelegramClient(s.telegramClient)
+    }
+
+    respondJSON(w, http.StatusOK, map[string]bool{"authenticated": auth})
 }

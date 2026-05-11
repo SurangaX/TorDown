@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 )
 
 func main() {
+	fmt.Println(">>> TorDown Server Starting...")
 	addr := envOrDefault("TORDOWN_LISTEN_ADDR", ":443")
 	downloadDir := envOrDefault("TORDOWN_DOWNLOAD_DIR", "./downloads")
 	sslCert := os.Getenv("TORDOWN_SSL_CERT")
@@ -26,17 +28,28 @@ func main() {
 	domain := os.Getenv("TORDOWN_DOMAIN")
 	storageMode := envOrDefault("TORDOWN_STORAGE_MODE", "local")
 
+	fmt.Printf(">>> Config: Addr=%s, Dir=%s, Mode=%s\n", addr, downloadDir, storageMode)
+
 	tgAPIID, _ := strconv.Atoi(os.Getenv("TORDOWN_TELEGRAM_API_ID"))
 	tgAPIHash := os.Getenv("TORDOWN_TELEGRAM_API_HASH")
 
 	var tgClient *telegram.Client
 	if tgAPIID != 0 && tgAPIHash != "" {
+		fmt.Printf(">>> Initializing Telegram (API ID: %d)\n", tgAPIID)
 		tgClient = telegram.NewClient(tgAPIID, tgAPIHash, filepath.Join(downloadDir, ".telegram"))
-		// Ensure the Telegram client is connected before using it for storage
-		if err := tgClient.EnsureConnected(context.Background()); err != nil {
-			log.Printf("warning: failed to connect telegram client: %v (downloads will use local storage)", err)
+		
+		// Ensure the Telegram client is connected with a timeout to prevent hanging
+		connectCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		
+		if err := tgClient.EnsureConnected(connectCtx); err != nil {
+			fmt.Printf(">>> Warning: Failed to connect Telegram: %v\n", err)
 			tgClient = nil
+		} else {
+			fmt.Println(">>> Telegram Connected Successfully")
 		}
+	} else {
+		fmt.Println(">>> Telegram API credentials not provided, skipping background auth")
 	}
 
 	mgr, err := torrent.NewManager(context.Background(), torrent.Config{
@@ -45,8 +58,10 @@ func main() {
 		TelegramClient: tgClient,
 	})
 	if err != nil {
-		log.Fatalf("failed to create torrent manager: %v", err)
+		fmt.Printf(">>> ERROR: Failed to create torrent manager: %v\n", err)
+		os.Exit(1)
 	}
+	fmt.Println(">>> Torrent Manager Ready")
 
 	h, err := server.NewHTTPServer(server.Config{
 		Manager:        mgr,
@@ -55,7 +70,8 @@ func main() {
 		DownloadDir:    downloadDir,
 	})
 	if err != nil {
-		log.Fatalf("failed to create http server: %v", err)
+		fmt.Printf(">>> ERROR: Failed to create http server: %v\n", err)
+		os.Exit(1)
 	}
 
 	srv := &http.Server{
@@ -78,11 +94,11 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(ctx); err != nil {
-			log.Printf("error shutting down main server: %v", err)
+			fmt.Printf(">>> Error shutting down main server: %v\n", err)
 		}
 		if redirectSrv != nil {
 			if err := redirectSrv.Shutdown(ctx); err != nil {
-				log.Printf("error shutting down redirect server: %v", err)
+				fmt.Printf(">>> Error shutting down redirect server: %v\n", err)
 			}
 		}
 	}()
@@ -125,21 +141,23 @@ func main() {
 		}
 
 		go func() {
-			log.Printf("HTTP redirect server listening on :80")
+			fmt.Printf(">>> HTTP redirect server listening on :80\n")
 			if err := redirectSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Printf("redirect server error: %v", err)
+				fmt.Printf(">>> Redirect server error: %v\n", err)
 				serverErr <- err
 			}
 		}()
 
-		log.Printf("torrent web UI listening on %s (HTTPS)", addr)
+		fmt.Printf(">>> Torrent web UI listening on %s (HTTPS)\n", addr)
 		if err := srv.ListenAndServeTLS(sslCert, sslKey); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("https server error: %v", err)
+			fmt.Printf(">>> ERROR: HTTPS server error: %v\n", err)
+			os.Exit(1)
 		}
 	} else {
-		log.Printf("torrent web UI listening on %s (HTTP)", addr)
+		fmt.Printf(">>> Torrent web UI listening on %s (HTTP)\n", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("http server error: %v", err)
+			fmt.Printf(">>> ERROR: HTTP server error: %v\n", err)
+			os.Exit(1)
 		}
 	}
 }

@@ -18,21 +18,26 @@ import (
 
 const telegramPartSize = 512 * 1024 // 512KB
 
-// TelegramStorage implements storage.ClientImpl for streaming to Telegram.
+// TelegramStorage handles the mapping of torrent pieces to Telegram uploads.
 type TelegramStorage struct {
 	tgClient *telegram.Client
 	mu       sync.Mutex
 	torrents map[metainfo.Hash]*telegramTorrent
 }
 
-func NewTelegramStorage(tgClient *telegram.Client) *TelegramStorage {
-	return &TelegramStorage{
+// NewTelegramStorage returns a storage.ClientImpl struct.
+func NewTelegramStorage(tgClient *telegram.Client) storage.ClientImpl {
+	ts := &TelegramStorage{
 		tgClient: tgClient,
 		torrents: make(map[metainfo.Hash]*telegramTorrent),
 	}
+	return storage.ClientImpl{
+		OpenTorrent: ts.OpenTorrent,
+		Close:       func() error { return nil },
+	}
 }
 
-// OpenTorrent satisfies storage.ClientImpl
+// OpenTorrent satisfies the struct-based OpenTorrent field.
 func (ts *TelegramStorage) OpenTorrent(info *metainfo.Info, infoHash metainfo.Hash) (storage.TorrentImpl, error) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -48,12 +53,11 @@ func (ts *TelegramStorage) OpenTorrent(info *metainfo.Info, infoHash metainfo.Ha
 		ts.torrents[infoHash] = t
 	}
 	t.info = info
-	return t, nil
-}
 
-// Close satisfies storage.ClientImpl
-func (ts *TelegramStorage) Close() error {
-	return nil
+	return storage.TorrentImpl{
+		Piece: t.Piece,
+		Close: func() error { return nil },
+	}, nil
 }
 
 type telegramTorrent struct {
@@ -182,36 +186,27 @@ func (t *telegramTorrent) commitFile(tf *telegramFile) error {
 	return err
 }
 
-// Close satisfies storage.TorrentImpl
-func (t *telegramTorrent) Close() error {
-	return nil
-}
-
-// Drop satisfies storage.TorrentImpl
-func (t *telegramTorrent) Drop() error {
-	return nil
-}
-
-// Flush satisfies storage.TorrentImpl
-func (t *telegramTorrent) Flush() error {
-	return nil
-}
-
-// Piece satisfies storage.TorrentImpl
+// Piece satisfies the struct-based Piece field in TorrentImpl.
 func (t *telegramTorrent) Piece(p metainfo.Piece) storage.PieceImpl {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if pi, ok := t.pieces[p.Index()]; ok {
-		return pi
+	pi, ok := t.pieces[p.Index()]
+	if !ok {
+		pi = &telegramPiece{
+			t:     t,
+			piece: p,
+		}
+		t.pieces[p.Index()] = pi
 	}
 
-	pi := &telegramPiece{
-		t:     t,
-		piece: p,
+	return storage.PieceImpl{
+		ReadAt:          pi.ReadAt,
+		WriteAt:         pi.WriteAt,
+		MarkComplete:    func() error { return nil },
+		MarkNotComplete: func() error { return nil },
+		Completion:      func() storage.Completion { return storage.Completion{Complete: false, Ok: false} },
 	}
-	t.pieces[p.Index()] = pi
-	return pi
 }
 
 type telegramPiece struct {
@@ -219,12 +214,10 @@ type telegramPiece struct {
 	piece metainfo.Piece
 }
 
-// ReadAt satisfies storage.PieceImpl (embedded io.ReaderAt)
 func (p *telegramPiece) ReadAt(b []byte, off int64) (n int, err error) {
 	return 0, io.EOF
 }
 
-// WriteAt satisfies storage.PieceImpl (embedded io.WriterAt)
 func (p *telegramPiece) WriteAt(b []byte, off int64) (n int, err error) {
 	t := p.t
 	if t.info == nil {
@@ -274,22 +267,4 @@ func (p *telegramPiece) WriteAt(b []byte, off int64) (n int, err error) {
 	}
 	
 	return len(b), nil
-}
-
-// MarkComplete satisfies storage.PieceImpl
-func (p *telegramPiece) MarkComplete() error {
-	return nil
-}
-
-// MarkNotComplete satisfies storage.PieceImpl
-func (p *telegramPiece) MarkNotComplete() error {
-	return nil
-}
-
-// Completion satisfies storage.PieceImpl
-func (p *telegramPiece) Completion() storage.Completion {
-	return storage.Completion{
-		Complete: false,
-		Ok:       false,
-	}
 }

@@ -39,6 +39,9 @@ func main() {
 		StorageMode:    storageMode,
 		TelegramClient: tgClient,
 	})
+	if err != nil {
+		log.Fatalf("failed to create torrent manager: %v", err)
+	}
 
 	h, err := server.NewHTTPServer(server.Config{
 		Manager:        mgr,

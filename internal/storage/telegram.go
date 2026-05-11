@@ -185,6 +185,10 @@ func (t *telegramTorrent) Close() error {
 	return nil
 }
 
+func (t *telegramTorrent) Drop() error {
+	return nil
+}
+
 func (t *telegramTorrent) Piece(p metainfo.Piece) storage.PieceImpl {
 	t.mu.Lock()
 	defer t.mu.Unlock()

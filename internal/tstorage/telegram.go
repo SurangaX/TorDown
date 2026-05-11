@@ -37,19 +37,17 @@ func (ts *TelegramStorage) OpenTorrent(info *metainfo.Info, infoHash metainfo.Ha
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
-	if t, ok := ts.torrents[infoHash]; ok {
-		t.info = info
-		return t, nil
+	t, ok := ts.torrents[infoHash]
+	if !ok {
+		t = &telegramTorrent{
+			ts:           ts,
+			infoHash:     infoHash,
+			pieces:       make(map[int]*telegramPiece),
+			filesByPart:  make(map[int64]*telegramFile),
+		}
+		ts.torrents[infoHash] = t
 	}
-
-	t := &telegramTorrent{
-		ts:           ts,
-		infoHash:     infoHash,
-		info:         info,
-		pieces:       make(map[int]*telegramPiece),
-		filesByPart:  make(map[int64]*telegramFile),
-	}
-	ts.torrents[infoHash] = t
+	t.info = info
 	return t, nil
 }
 
@@ -189,8 +187,13 @@ func (t *telegramTorrent) Close() error {
 	return nil
 }
 
-// Drop satisfies storage.TorrentImpl (some versions of the library)
+// Drop satisfies storage.TorrentImpl
 func (t *telegramTorrent) Drop() error {
+	return nil
+}
+
+// Flush satisfies storage.TorrentImpl
+func (t *telegramTorrent) Flush() error {
 	return nil
 }
 

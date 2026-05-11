@@ -1,4 +1,4 @@
-package storage
+package tstorage
 
 import (
 	"context"
@@ -87,6 +87,7 @@ func (t *telegramTorrent) initFiles() {
 		return
 	}
 
+	var currentOffset int64
 	for _, f := range t.info.UpvertedFiles() {
 		var id int64
 		binary.Read(rand.Reader, binary.LittleEndian, &id)
@@ -94,7 +95,7 @@ func (t *telegramTorrent) initFiles() {
 		tf := &telegramFile{
 			id:            id,
 			name:          f.DisplayPath(t.info),
-			offset:        f.Offset,
+			offset:        currentOffset,
 			length:        f.Length,
 			totalParts:    int((f.Length + telegramPartSize - 1) / telegramPartSize),
 			uploadedParts: make(map[int]bool),
@@ -110,6 +111,8 @@ func (t *telegramTorrent) initFiles() {
 		for p := startPart; p <= endPart; p++ {
 			t.filesByPart[p] = tf
 		}
+		
+		currentOffset += f.Length
 	}
 }
 
@@ -259,18 +262,6 @@ func (p *telegramPiece) WriteAt(b []byte, off int64) (n int, err error) {
 }
 
 func (p *telegramPiece) MarkComplete() error {
-	t := p.t
-	if t.info == nil {
-		return nil
-	}
-	
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	// In this implementation, we can't easily check if all pieces for a specific file are done 
-	// because we don't have the anacrolix.Torrent object here.
-	// But we can check if this was the last piece of the torrent.
-	// For now, let's just log.
 	return nil
 }
 
@@ -281,6 +272,6 @@ func (p *telegramPiece) MarkNotComplete() error {
 func (p *telegramPiece) Completion() storage.Completion {
 	return storage.Completion{
 		Complete: false,
-		Ok:       false, // Setting to false forces the client to hash it if it needs to know
+		Ok:       false,
 	}
 }

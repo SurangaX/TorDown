@@ -43,6 +43,8 @@ func (c *Client) UploadFile(ctx context.Context, filePath string, fileName strin
 		totalParts = 1
 	}
 
+	isBig := fileSize > 10*1024*1024 // Greater than 10MB
+
 	buffer := make([]byte, telegramPartSize)
 	for i := 0; i < totalParts; i++ {
 		n, err := io.ReadFull(file, buffer)
@@ -51,12 +53,20 @@ func (c *Client) UploadFile(ctx context.Context, filePath string, fileName strin
 		}
 
 		data := buffer[:n]
-		_, err = raw.UploadSaveBigFilePart(ctx, &tg.UploadSaveBigFilePartRequest{
-			FileID:         fileID,
-			FilePart:       i,
-			FileTotalParts: totalParts,
-			Bytes:          data,
-		})
+		if isBig {
+			_, err = raw.UploadSaveBigFilePart(ctx, &tg.UploadSaveBigFilePartRequest{
+				FileID:         fileID,
+				FilePart:       i,
+				FileTotalParts: totalParts,
+				Bytes:          data,
+			})
+		} else {
+			_, err = raw.UploadSaveFilePart(ctx, &tg.UploadSaveFilePartRequest{
+				FileID:   fileID,
+				FilePart: i,
+				Bytes:    data,
+			})
+		}
 		if err != nil {
 			return fmt.Errorf("failed to upload part %d: %w", i, err)
 		}
@@ -68,15 +78,26 @@ func (c *Client) UploadFile(ctx context.Context, filePath string, fileName strin
 		return fmt.Errorf("failed to generate random ID: %w", err)
 	}
 
+	var inputFile tg.InputFileClass
+	if isBig {
+		inputFile = &tg.InputFileBig{
+			ID:    fileID,
+			Parts: totalParts,
+			Name:  fileName,
+		}
+	} else {
+		inputFile = &tg.InputFile{
+			ID:    fileID,
+			Parts: totalParts,
+			Name:  fileName,
+		}
+	}
+
 	_, err = raw.MessagesSendMedia(ctx, &tg.MessagesSendMediaRequest{
 		Peer: &tg.InputPeerSelf{},
 		Media: &tg.InputMediaUploadedDocument{
-			File: &tg.InputFileBig{
-				ID:    fileID,
-				Parts: totalParts,
-				Name:  fileName,
-			},
-			MimeType: "application/octet-stream",
+			File:       inputFile,
+			MimeType:   "application/octet-stream",
 			Attributes: []tg.DocumentAttributeClass{
 				&tg.DocumentAttributeFilename{FileName: fileName},
 			},

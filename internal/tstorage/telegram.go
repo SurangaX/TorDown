@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/anacrolix/torrent/infohash"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 	"github.com/gotd/td/tg"
@@ -33,12 +32,13 @@ func NewTelegramStorage(tgClient *telegram.Client) storage.ClientImpl {
 	}
 }
 
-// OpenTorrent satisfies the ClientImpl interface discovered via reflection.
-func (ts *TelegramStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, infoHash infohash.T) (storage.TorrentImpl, error) {
+// OpenTorrent satisfies the ClientImpl interface. 
+// We use [20]byte for the infohash parameter to avoid the infohash package import,
+// as reflection showed it matches that type.
+func (ts *TelegramStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, infoHash [20]byte) (storage.TorrentImpl, error) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
-	// Convert infohash.T to metainfo.Hash
 	ih := metainfo.Hash(infoHash)
 
 	t, ok := ts.torrents[ih]
@@ -53,7 +53,6 @@ func (ts *TelegramStorage) OpenTorrent(ctx context.Context, info *metainfo.Info,
 	}
 	t.info = info
 
-	// TorrentImpl is a STRUCT, return it as a literal.
 	return storage.TorrentImpl{
 		Piece: t.Piece,
 		Close: func() error { return nil },
@@ -186,7 +185,6 @@ func (t *telegramTorrent) commitFile(tf *telegramFile) error {
 	return err
 }
 
-// Piece satisfies the TorrentImpl struct field.
 func (t *telegramTorrent) Piece(p metainfo.Piece) storage.PieceImpl {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -206,13 +204,6 @@ type telegramPiece struct {
 	t     *telegramTorrent
 	piece metainfo.Piece
 }
-
-// PieceImpl methods Discovery:
-// Completion func() storage.Completion
-// MarkComplete func() error
-// MarkNotComplete func() error
-// ReadAt func([]uint8, int64) (int, error)
-// WriteAt func([]uint8, int64) (int, error)
 
 func (p *telegramPiece) ReadAt(b []byte, off int64) (n int, err error) {
 	return 0, io.EOF

@@ -124,8 +124,13 @@ func (c *Client) RequestCode(ctx context.Context, phone string) (string, error) 
 		return "", err
 	}
 
+	sc, ok := sentCode.(*tg.AuthSentCode)
+	if !ok {
+		return "", fmt.Errorf("unexpected sent code type: %T", sentCode)
+	}
+
 	c.mu.Lock()
-	c.phoneCodeHash = sentCode.PhoneCodeHash
+	c.phoneCodeHash = sc.PhoneCodeHash
 	c.mu.Unlock()
 
 	return "code_sent", nil
@@ -145,8 +150,7 @@ func (c *Client) SignIn(ctx context.Context, code string) (bool, string, error) 
 	_, err := c.client.Auth().SignIn(ctx, phone, code, phoneCodeHash)
 	if err != nil {
 		// Check for 2FA requirement
-		var rpcErr *tg.Error
-		if errors.As(err, &rpcErr) && rpcErr.Type == "SESSION_PASSWORD_NEEDED" {
+		if tg.IsError(err, "SESSION_PASSWORD_NEEDED") {
 			return false, "password_required", nil
 		}
 		return false, "", err

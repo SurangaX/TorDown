@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/anacrolix/torrent/infohash"
 	"github.com/anacrolix/torrent/metainfo"
 	"github.com/anacrolix/torrent/storage"
 	"github.com/gotd/td/tg"
@@ -18,42 +19,41 @@ import (
 
 const telegramPartSize = 512 * 1024 // 512KB
 
-// TelegramStorage handles the mapping of torrent pieces to Telegram uploads.
+// TelegramStorage implements storage.ClientImpl interface.
 type TelegramStorage struct {
 	tgClient *telegram.Client
 	mu       sync.Mutex
 	torrents map[metainfo.Hash]*telegramTorrent
 }
 
-// NewTelegramStorage returns a storage.ClientImpl struct.
 func NewTelegramStorage(tgClient *telegram.Client) storage.ClientImpl {
-	ts := &TelegramStorage{
+	return &TelegramStorage{
 		tgClient: tgClient,
 		torrents: make(map[metainfo.Hash]*telegramTorrent),
 	}
-	return storage.ClientImpl{
-		OpenTorrent: ts.OpenTorrent,
-		Close:       func() error { return nil },
-	}
 }
 
-// OpenTorrent satisfies the struct-based OpenTorrent field.
-func (ts *TelegramStorage) OpenTorrent(info *metainfo.Info, infoHash metainfo.Hash) (storage.TorrentImpl, error) {
+// OpenTorrent satisfies the ClientImpl interface discovered via reflection.
+func (ts *TelegramStorage) OpenTorrent(ctx context.Context, info *metainfo.Info, infoHash infohash.T) (storage.TorrentImpl, error) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
-	t, ok := ts.torrents[infoHash]
+	// Convert infohash.T to metainfo.Hash
+	ih := metainfo.Hash(infoHash)
+
+	t, ok := ts.torrents[ih]
 	if !ok {
 		t = &telegramTorrent{
 			ts:           ts,
-			infoHash:     infoHash,
+			infoHash:     ih,
 			pieces:       make(map[int]*telegramPiece),
 			filesByPart:  make(map[int64]*telegramFile),
 		}
-		ts.torrents[infoHash] = t
+		ts.torrents[ih] = t
 	}
 	t.info = info
 
+	// TorrentImpl is a STRUCT, return it as a literal.
 	return storage.TorrentImpl{
 		Piece: t.Piece,
 		Close: func() error { return nil },
@@ -186,7 +186,7 @@ func (t *telegramTorrent) commitFile(tf *telegramFile) error {
 	return err
 }
 
-// Piece satisfies the struct-based Piece field in TorrentImpl.
+// Piece satisfies the TorrentImpl struct field.
 func (t *telegramTorrent) Piece(p metainfo.Piece) storage.PieceImpl {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -199,20 +199,20 @@ func (t *telegramTorrent) Piece(p metainfo.Piece) storage.PieceImpl {
 		}
 		t.pieces[p.Index()] = pi
 	}
-
-	return storage.PieceImpl{
-		ReadAt:          pi.ReadAt,
-		WriteAt:         pi.WriteAt,
-		MarkComplete:    func() error { return nil },
-		MarkNotComplete: func() error { return nil },
-		Completion:      func() storage.Completion { return storage.Completion{Complete: false, Ok: false} },
-	}
+	return pi
 }
 
 type telegramPiece struct {
 	t     *telegramTorrent
 	piece metainfo.Piece
 }
+
+// PieceImpl methods Discovery:
+// Completion func() storage.Completion
+// MarkComplete func() error
+// MarkNotComplete func() error
+// ReadAt func([]uint8, int64) (int, error)
+// WriteAt func([]uint8, int64) (int, error)
 
 func (p *telegramPiece) ReadAt(b []byte, off int64) (n int, err error) {
 	return 0, io.EOF
@@ -267,4 +267,19 @@ func (p *telegramPiece) WriteAt(b []byte, off int64) (n int, err error) {
 	}
 	
 	return len(b), nil
+}
+
+func (p *telegramPiece) MarkComplete() error {
+	return nil
+}
+
+func (p *telegramPiece) MarkNotComplete() error {
+	return nil
+}
+
+func (p *telegramPiece) Completion() storage.Completion {
+	return storage.Completion{
+		Complete: false,
+		Ok:       false,
+	}
 }

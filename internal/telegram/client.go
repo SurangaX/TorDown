@@ -44,11 +44,11 @@ func NewClient(apiID int, apiHash string, sessionDir string) *Client {
 // EnsureConnected starts the Telegram client if it's not already running.
 func (c *Client) EnsureConnected(ctx context.Context) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.running {
+		c.mu.Unlock()
 		return nil
 	}
+	c.mu.Unlock()
 
 	if err := os.MkdirAll(c.sessionDir, 0755); err != nil {
 		return fmt.Errorf("failed to create session directory: %w", err)
@@ -65,9 +65,15 @@ func (c *Client) EnsureConnected(ctx context.Context) error {
 
 	runCtx, cancel := context.WithCancel(context.Background())
 	c.cancel = cancel
-	c.running = true
+	
+	ready := make(chan struct{})
+	errChan := make(chan error, 1)
 
 	go func() {
+		c.mu.Lock()
+		c.running = true
+		c.mu.Unlock()
+
 		defer func() {
 			c.mu.Lock()
 			c.running = false
@@ -75,15 +81,28 @@ func (c *Client) EnsureConnected(ctx context.Context) error {
 		}()
 		
 		err := c.client.Run(runCtx, func(ctx context.Context) error {
-			// Client is ready and connected
-			return nil
+			close(ready)
+			<-ctx.Done()
+			return ctx.Err()
 		})
 		if err != nil && !errors.Is(err, context.Canceled) {
 			fmt.Printf("Telegram client runner error: %v\n", err)
+			select {
+			case errChan <- err:
+			default:
+			}
 		}
 	}()
 
-	return nil
+	// Wait for client to be ready or fail
+	select {
+	case <-ready:
+		return nil
+	case err := <-errChan:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Raw returns the underlying tg.Client for direct API calls.

@@ -1358,10 +1358,3 @@ type CleanupResult struct {
 func normalizeInfoHash(value string) string {
     return strings.ToLower(strings.TrimSpace(strings.TrimPrefix(value, "0x")))
 }
-oved      []string `json:"removed"`
-    RemovedCount int      `json:"removedCount"`
-}
-
-func normalizeInfoHash(value string) string {
-    return strings.ToLower(strings.TrimSpace(strings.TrimPrefix(value, "0x")))
-}

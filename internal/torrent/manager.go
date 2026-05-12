@@ -89,6 +89,9 @@ type Manager struct {
     selMu             sync.Mutex
     pendingSelections map[string]selectionOptions
 
+    watchMu  sync.Mutex
+    watchers map[string]context.CancelFunc
+
     persistMu sync.Mutex
     statePath string
     state     map[string]persistedTorrent
@@ -267,10 +270,31 @@ func (m *Manager) initializeTorrent(ctx context.Context, t *atorrent.Torrent, op
 
     if m.tgClient != nil {
         fmt.Fprintf(os.Stderr, "[Manager] Starting auto-upload watcher for %s\n", infoHash)
-        go m.awaitCompletionAndUpload(ctx, t, infoHash)
+        m.startWatcher(t, infoHash)
     }
 
     return m.buildSummary(t)
+}
+
+func (m *Manager) startWatcher(t *atorrent.Torrent, infoHash string) {
+    m.watchMu.Lock()
+    if cancel, exists := m.watchers[infoHash]; exists {
+        cancel()
+    }
+    ctx, cancel := context.WithCancel(m.baseCtx)
+    m.watchers[infoHash] = cancel
+    m.watchMu.Unlock()
+
+    go func() {
+        defer func() {
+            m.watchMu.Lock()
+            if currentCancel, exists := m.watchers[infoHash]; exists {
+                delete(m.watchers, infoHash)
+            }
+            m.watchMu.Unlock()
+        }()
+        m.awaitCompletionAndUpload(ctx, t, infoHash)
+    }()
 }
 
 func (m *Manager) awaitMetadata(ctx context.Context, t *atorrent.Torrent, infoHash string, selection selectionOptions) {

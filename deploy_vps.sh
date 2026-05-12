@@ -53,6 +53,7 @@ echo "  ✓ Python uploader ready"
 # Rebuild Go binary with new code
 echo "[6/6] Building TorDown binary with Python integration..."
 cd "$TORDOWN_DIR"
+rm -f bin/tordown
 GOMAXPROCS=1 go build -p 1 -v -o bin/tordown ./cmd/server 2>&1 | grep -E "^tordown|error" | head -5
 
 # Verify binary was built
@@ -65,6 +66,10 @@ fi
 
 echo "  ✓ Binary built successfully"
 chmod +x "$TORDOWN_DIR/bin/tordown"
+
+# Aggressive kill before starting
+pkill -9 -f "bin/tordown" || true
+sleep 1
 
 # Start server
 echo ""

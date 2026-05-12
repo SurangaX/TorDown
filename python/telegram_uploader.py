@@ -222,13 +222,17 @@ async def main():
         file_path = request.get("file_path", "")
         session_dir = request.get("session_dir")
         
-        if not all([api_id, api_hash, phone, file_path]):
+        if not all([api_id, api_hash, file_path]):
             result = {
                 "success": False,
-                "error": "Missing required fields: api_id, api_hash, phone, file_path"
+                "error": "Missing required fields: api_id, api_hash, file_path"
             }
             print(json.dumps(result))
             return
+        
+        # Phone is optional if we have a session
+        if not phone:
+            logger.info("No phone provided, assuming existing session")
         
         # Create uploader
         uploader = TelegramUploader(

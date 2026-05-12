@@ -142,6 +142,7 @@ func NewManager(ctx context.Context, cfg Config) (*Manager, error) {
         created:           make(map[string]time.Time),
         rateSamples:       make(map[string]rateSample),
         pendingSelections: make(map[string]selectionOptions),
+        watchers:          make(map[string]context.CancelFunc),
         statePath:         filepath.Join(absDir, persistedStateFileName),
         state:             make(map[string]persistedTorrent),
     }
@@ -314,6 +315,12 @@ func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torr
     }
     m.persistMu.Unlock()
 
+    completed, total := selectedOrAllBytes(t)
+    if total > 0 && completed >= total {
+        fmt.Fprintf(os.Stderr, "[Telegram] COMPLETED: %s already finished, TRIGGERING UPLOAD\n", infoHash)
+        goto upload
+    }
+
     ticker := time.NewTicker(10 * time.Second)
     defer ticker.Stop()
 
@@ -348,7 +355,7 @@ upload:
     fmt.Fprintf(os.Stderr, "[Telegram] DEBUG: File count = %d (starting upload phase)\n", len(files))
     
     uploadCount := 0
-    for i, f := range files {
+    for _, f := range files {
         path := filepath.Join(m.downloadDir, f.Path())
         
         // Check if file actually exists on disk instead of relying on priority
@@ -526,7 +533,7 @@ func (m *Manager) StartCloudWatchers() {
     fmt.Fprintf(os.Stderr, "[Manager] Launching watchers for %d live torrents\n", len(torrents))
     for _, t := range torrents {
         infoHash := formatInfoHash(t.InfoHash())
-        go m.awaitCompletionAndUpload(m.baseCtx, t, infoHash)
+        m.startWatcher(t, infoHash)
     }
 }
 
@@ -1345,6 +1352,13 @@ type ClientStats struct {
 // CleanupResult reports what orphan data entries were removed from disk.
 type CleanupResult struct {
     Removed      []string `json:"removed"`
+    RemovedCount int      `json:"removedCount"`
+}
+
+func normalizeInfoHash(value string) string {
+    return strings.ToLower(strings.TrimSpace(strings.TrimPrefix(value, "0x")))
+}
+oved      []string `json:"removed"`
     RemovedCount int      `json:"removedCount"`
 }
 

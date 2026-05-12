@@ -441,6 +441,15 @@ func (s *httpServer) handleVerifyTorrent(w http.ResponseWriter, r *http.Request)
     respondJSON(w, http.StatusAccepted, map[string]string{"status": "verification-started"})
 }
 
+func (s *httpServer) handleForceUpload(w http.ResponseWriter, r *http.Request) {
+    infoHash := chi.URLParam(r, "infoHash")
+    if err := s.manager.ForceUpload(infoHash); err != nil {
+        respondError(w, err)
+        return
+    }
+    respondJSON(w, http.StatusOK, map[string]string{"status": "upload-triggered"})
+}
+
 func (s *httpServer) spaHandler(fs http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         if strings.HasPrefix(r.URL.Path, "/api/") {

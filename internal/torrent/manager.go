@@ -569,6 +569,25 @@ func (m *Manager) StartCloudWatchers() {
     }
 }
 
+// ForceUpload manually triggers the cloud upload watcher for a specific torrent.
+func (m *Manager) ForceUpload(infoHash string) error {
+    t, err := m.findTorrent(infoHash)
+    if err != nil {
+        return err
+    }
+    
+    m.mu.RLock()
+    client := m.tgClient
+    m.mu.RUnlock()
+    
+    if client == nil {
+        return errors.New("telegram client not connected")
+    }
+
+    m.startWatcher(t, formatInfoHash(t.InfoHash()))
+    return nil
+}
+
 // RemoveTorrent drops the torrent from the client and optionally deletes data.
 func (m *Manager) RemoveTorrent(infoHash string, deleteData bool) error {
     normalized := normalizeInfoHash(infoHash)

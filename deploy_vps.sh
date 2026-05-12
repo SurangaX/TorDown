@@ -53,6 +53,7 @@ echo "  ✓ Python uploader ready"
 # Rebuild Go binary with new code
 echo "[6/6] Building TorDown binary with Python integration..."
 cd "$TORDOWN_DIR"
+go mod tidy
 rm -f bin/tordown
 GOMAXPROCS=1 go build -p 1 -v -o bin/tordown ./cmd/server 2>&1 | grep -E "^tordown|error" | head -5
 

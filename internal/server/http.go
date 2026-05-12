@@ -121,6 +121,7 @@ func (s *httpServer) mountAPI(r chi.Router) {
         r.Post("/resume", s.handleResumeTorrent)
         r.Post("/verify", s.handleVerifyTorrent)
         r.Post("/selection", s.handleUpdateSelection)
+        r.Post("/upload", s.handleForceUpload)
         r.Get("/files/{fileIndex}", s.handleDownloadFile)
         r.Delete("/files/{fileIndex}", s.handleDeleteFile)
         r.Get("/download-zip", s.handleDownloadZip)

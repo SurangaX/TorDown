@@ -1038,13 +1038,32 @@ func (s *httpServer) handleTelegramCheck(w http.ResponseWriter, r *http.Request)
         return
     }
 
-    if err := s.telegramClient.EnsureConnected(r.Context()); err != nil {
+    ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+    defer cancel()
+
+    if err := s.telegramClient.EnsureConnected(ctx); err != nil {
+        if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+            respondJSON(w, http.StatusOK, map[string]interface{}{
+                "authenticated": false,
+                "initialized":   true,
+                "status":        "connecting",
+            })
+            return
+        }
         respondError(w, err)
         return
     }
 
-    auth, err := s.telegramClient.IsAuthenticated(r.Context())
+    auth, err := s.telegramClient.IsAuthenticated(ctx)
     if err != nil {
+        if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+            respondJSON(w, http.StatusOK, map[string]interface{}{
+                "authenticated": false,
+                "initialized":   true,
+                "status":        "connecting",
+            })
+            return
+        }
         respondError(w, err)
         return
     }

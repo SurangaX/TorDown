@@ -813,11 +813,16 @@ function closeDetailsPanel() {
 }
 
 async function apiRequest(method, url, body, options = {}) {
+  const controller = new AbortController();
+  const timeoutMs = typeof options.timeoutMs === "number" ? options.timeoutMs : 30000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   const requestOptions = {
     method,
     headers: {
       Accept: "application/json",
     },
+    signal: controller.signal,
   };
 
   if (body && method !== "GET" && method !== "DELETE") {
@@ -825,7 +830,18 @@ async function apiRequest(method, url, body, options = {}) {
     requestOptions.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, requestOptions);
+  let response;
+  try {
+    response = await fetch(url, requestOptions);
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw new Error("Request timed out");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
   const contentType = response.headers.get("Content-Type") || "";
 
   let payload = null;
@@ -1293,11 +1309,11 @@ async function downloadAllFiles() {
 // Telegram Functions
 async function checkTelegramStatus() {
   try {
-    const status = await apiRequest("GET", `${API_BASE}/telegram/check`);
+    const status = await apiRequest("GET", `${API_BASE}/telegram/check`, null, { timeoutMs: 10000 });
     updateTelegramUI(status);
   } catch (error) {
-    console.error("Failed to check Telegram status:", error);
-    elements.tgStatus.innerHTML = `<p class="error">Failed to connect to backend.</p>`;
+    console.warn("Failed to check Telegram status:", error);
+    elements.tgStatus.innerHTML = `<p class="error">Telegram status check timed out. Please retry in a moment.</p>`;
   }
 }
 

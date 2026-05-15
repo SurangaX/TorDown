@@ -497,12 +497,9 @@ func (m *Manager) GetTorrent(ctx context.Context, infoHash string) (TorrentSumma
 
 // ForceUpload forces a torrent to be uploaded to Telegram, bypassing the watcher.
 func (m *Manager) ForceUpload(infoHash string) error {
-    m.mu.Lock()
-    t, ok := m.torrents[infoHash]
-    m.mu.Unlock()
-    
-    if !ok {
-        return fmt.Errorf("torrent not found: %s", infoHash)
+    t, err := m.findTorrent(infoHash)
+    if err != nil {
+        return err
     }
     
     if m.tgClient == nil {

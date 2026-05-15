@@ -97,6 +97,12 @@ document.addEventListener("DOMContentLoaded", () => {
   elements.tgPhoneInput = document.getElementById("tg-phone");
   elements.tgCodeInput = document.getElementById("tg-code");
   elements.tgPasswordInput = document.getElementById("tg-password");
+  // Upload status elements
+  elements.tgUploadStatus = document.getElementById("telegram-upload-status");
+  elements.uploadStatusText = document.getElementById("upload-status-text");
+  elements.uploadFileName = document.getElementById("upload-file-name");
+  elements.uploadTime = document.getElementById("upload-time");
+  elements.refreshUploadStatusBtn = document.getElementById("refresh-upload-status");
 
   // Cleanup modal elements
   elements.cleanupModal = document.getElementById("cleanup-modal");

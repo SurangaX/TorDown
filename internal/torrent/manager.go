@@ -89,9 +89,6 @@ type Manager struct {
     selMu             sync.Mutex
     pendingSelections map[string]selectionOptions
 
-    watchMu  sync.Mutex
-    watchers map[string]context.CancelFunc
-
     persistMu sync.Mutex
     statePath string
     state     map[string]persistedTorrent
@@ -145,7 +142,6 @@ func NewManager(ctx context.Context, cfg Config) (*Manager, error) {
         created:           make(map[string]time.Time),
         rateSamples:       make(map[string]rateSample),
         pendingSelections: make(map[string]selectionOptions),
-        watchers:          make(map[string]context.CancelFunc),
         statePath:         filepath.Join(absDir, persistedStateFileName),
         state:             make(map[string]persistedTorrent),
     }
@@ -270,31 +266,10 @@ func (m *Manager) initializeTorrent(ctx context.Context, t *atorrent.Torrent, op
 
     if m.tgClient != nil {
         fmt.Fprintf(os.Stderr, "[Manager] Starting auto-upload watcher for %s\n", infoHash)
-        m.startWatcher(t, infoHash)
+        go m.awaitCompletionAndUpload(ctx, t, infoHash)
     }
 
     return m.buildSummary(t)
-}
-
-func (m *Manager) startWatcher(t *atorrent.Torrent, infoHash string) {
-    m.watchMu.Lock()
-    if cancel, exists := m.watchers[infoHash]; exists {
-        cancel()
-    }
-    ctx, cancel := context.WithCancel(m.baseCtx)
-    m.watchers[infoHash] = cancel
-    m.watchMu.Unlock()
-
-    go func() {
-        defer func() {
-            m.watchMu.Lock()
-            if _, exists := m.watchers[infoHash]; exists {
-                delete(m.watchers, infoHash)
-            }
-            m.watchMu.Unlock()
-        }()
-        m.awaitCompletionAndUpload(ctx, t, infoHash)
-    }()
 }
 
 func (m *Manager) awaitMetadata(ctx context.Context, t *atorrent.Torrent, infoHash string, selection selectionOptions) {
@@ -324,7 +299,7 @@ func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torr
     select {
     case <-t.GotInfo():
         fmt.Fprintf(os.Stderr, "[Telegram] INFO: Metadata received for %s\n", infoHash)
-    case <-ctx.Done():
+    case <-m.baseCtx.Done():
         fmt.Fprintf(os.Stderr, "[Telegram] INFO: Watcher for %s STOPPED (cancelled)\n", infoHash)
         return
     }
@@ -342,35 +317,33 @@ func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torr
     completed, total := selectedOrAllBytes(t)
     if total > 0 && completed >= total {
         fmt.Fprintf(os.Stderr, "[Telegram] COMPLETED: %s already finished, TRIGGERING UPLOAD\n", infoHash)
-        goto performUpload
+        goto upload
     }
 
-    {
-        ticker := time.NewTicker(10 * time.Second)
-        defer ticker.Stop()
+    ticker := time.NewTicker(10 * time.Second)
+    defer ticker.Stop()
 
-        for {
-            select {
-            case <-ctx.Done():
-                fmt.Fprintf(os.Stderr, "[Telegram] INFO: %s context done, EXITING\n", infoHash)
-                return
-            case <-ticker.C:
-                completed, total := selectedOrAllBytes(t)
-                if total > 0 {
-                    percent := float64(completed) / float64(total) * 100
-                    fmt.Fprintf(os.Stderr, "[Telegram] STATUS: %s progress: %.2f%% (%d/%d)\n", infoHash, percent, completed, total)
-                    if completed >= total {
-                        fmt.Fprintf(os.Stderr, "[Telegram] COMPLETED: %s! TRIGGERING UPLOAD\n", infoHash)
-                        goto performUpload
-                    }
-                } else {
-                    fmt.Fprintf(os.Stderr, "[Telegram] WAIT: %s waiting for sizes...\n", infoHash)
+    for {
+        select {
+        case <-m.baseCtx.Done():
+            fmt.Fprintf(os.Stderr, "[Telegram] INFO: %s context done, EXITING\n", infoHash)
+            return
+        case <-ticker.C:
+            completed, total := selectedOrAllBytes(t)
+            if total > 0 {
+                percent := float64(completed) / float64(total) * 100
+                fmt.Fprintf(os.Stderr, "[Telegram] STATUS: %s progress: %.2f%% (%d/%d)\n", infoHash, percent, completed, total)
+                if completed >= total {
+                    fmt.Fprintf(os.Stderr, "[Telegram] COMPLETED: %s! TRIGGERING UPLOAD\n", infoHash)
+                    goto upload
                 }
+            } else {
+                fmt.Fprintf(os.Stderr, "[Telegram] WAIT: %s waiting for sizes...\n", infoHash)
             }
         }
     }
 
-performUpload:
+upload:
     info := t.Info()
     if info == nil {
         fmt.Fprintf(os.Stderr, "[Telegram] ERR: %s metadata lost during upload start\n", infoHash)
@@ -382,12 +355,6 @@ performUpload:
     
     uploadCount := 0
     for _, f := range files {
-        // Respect cancellation during upload phase
-        if ctx.Err() != nil {
-            fmt.Fprintf(os.Stderr, "[Telegram] CANCELLED: Stopping upload for %s\n", infoHash)
-            return
-        }
-
         path := filepath.Join(m.downloadDir, f.Path())
         
         // Check if file actually exists on disk instead of relying on priority
@@ -405,7 +372,7 @@ performUpload:
 
         uploadCount++
         fmt.Fprintf(os.Stderr, "[Telegram] UPLOAD: Starting file %s - size %dB (upload #%d)\n", f.Path(), fileInfo.Size(), uploadCount)
-        err = m.tgClient.UploadFile(ctx, path, filepath.Base(path))
+        err = m.tgClient.UploadFile(m.baseCtx, path, filepath.Base(path))
         if err != nil {
             fmt.Fprintf(os.Stderr, "[Telegram] ERR: %s upload FAILED: %v\n", f.Path(), err)
             return
@@ -565,27 +532,8 @@ func (m *Manager) StartCloudWatchers() {
     fmt.Fprintf(os.Stderr, "[Manager] Launching watchers for %d live torrents\n", len(torrents))
     for _, t := range torrents {
         infoHash := formatInfoHash(t.InfoHash())
-        m.startWatcher(t, infoHash)
+        go m.awaitCompletionAndUpload(m.baseCtx, t, infoHash)
     }
-}
-
-// ForceUpload manually triggers the cloud upload watcher for a specific torrent.
-func (m *Manager) ForceUpload(infoHash string) error {
-    t, err := m.findTorrent(infoHash)
-    if err != nil {
-        return err
-    }
-    
-    m.mu.RLock()
-    client := m.tgClient
-    m.mu.RUnlock()
-    
-    if client == nil {
-        return errors.New("telegram client not connected")
-    }
-
-    m.startWatcher(t, formatInfoHash(t.InfoHash()))
-    return nil
 }
 
 // RemoveTorrent drops the torrent from the client and optionally deletes data.

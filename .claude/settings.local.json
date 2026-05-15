@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /Users/SurangaX/Documents/PROJECT X/TorDown-main)",
+      "Bash(GOMAXPROCS=1 go build -p 1 -o bin/tordown ./cmd/server)"
+    ]
+  }
+}

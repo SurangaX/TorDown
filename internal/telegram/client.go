@@ -27,7 +27,13 @@ type Client struct {
 	mu            sync.Mutex
 	phone         string
 	phoneCodeHash string
-	
+
+	// Last upload status
+	lastUploadSuccess bool
+	lastUploadFile    string
+	lastUploadError   string
+	lastUploadTime    int64 // unix timestamp
+
 	// runner fields
 	cancel context.CancelFunc
 	running bool
@@ -229,9 +235,30 @@ func (c *Client) Logout(ctx context.Context) error {
 	if _, err := c.raw.AuthLogOut(ctx); err != nil {
 		return err
 	}
-	
+
 	c.Stop()
-	
+
 	sessionFile := filepath.Join(c.sessionDir, "session.json")
 	return os.Remove(sessionFile)
+}
+
+// setLastUploadStatus records the result of the last upload attempt.
+func (c *Client) setLastUploadStatus(success bool, filePath string, errMsg string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastUploadSuccess = success
+	if filePath != "" {
+		c.lastUploadFile = filepath.Base(filePath)
+	} else {
+		c.lastUploadFile = ""
+	}
+	c.lastUploadError = errMsg
+	c.lastUploadTime = time.Now().Unix()
+}
+
+// GetLastUploadStatus returns the status of the last upload attempt.
+func (c *Client) GetLastUploadStatus() (bool, string, string, int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lastUploadSuccess, c.lastUploadFile, c.lastUploadError, c.lastUploadTime
 }

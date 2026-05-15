@@ -39,6 +39,14 @@
       <div id="telegram-status" class="telegram-status">
         <p>Checking connection...</p>
       </div>
+
+      <!-- Upload Status -->
+      <div id="telegram-upload-status" class="telegram-upload-status" hidden>
+        <p>Last upload: <span id="upload-status-text">None</span></p>
+        <p>Uploaded file: <span id="upload-file-name">None</span></p>
+        <p>Upload time: <span id="upload-time">None</span></p>
+        <button id="refresh-upload-status" class="btn-secondary btn-sm">Refresh</button>
+      </div>
       
       <!-- Connect Form (API ID/Hash) -->
       <form id="telegram-connect-form" class="telegram-form" hidden>

@@ -112,6 +112,7 @@ func (s *httpServer) mountAPI(r chi.Router) {
         r.Post("/logout", s.handleTelegramLogout)
         r.Post("/qr/login", s.handleTelegramQRLogin)
         r.Get("/qr/poll", s.handleTelegramQRPoll)
+        r.Get("/upload-status", s.handleTelegramUploadStatus)
     })
 
     r.Route("/torrents/{infoHash}", func(r chi.Router) {
@@ -1171,4 +1172,24 @@ func (s *httpServer) handleTelegramQRPoll(w http.ResponseWriter, r *http.Request
     }
 
     respondJSON(w, http.StatusOK, map[string]bool{"authenticated": auth})
+}
+
+func (s *httpServer) handleTelegramUploadStatus(w http.ResponseWriter, r *http.Request) {
+    if s.telegramClient == nil {
+        respondJSON(w, http.StatusOK, map[string]interface{}{
+            "success": false,
+            "file":    "",
+            "error":   "Telegram client not initialized",
+            "time":    time.Now().Unix(),
+        })
+        return
+    }
+
+    success, file, errMsg, timestamp := s.telegramClient.GetLastUploadStatus()
+    respondJSON(w, http.StatusOK, map[string]interface{}{
+        "success": success,
+        "file":    file,
+        "error":   errMsg,
+        "time":    timestamp,
+    })
 }

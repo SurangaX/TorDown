@@ -495,6 +495,26 @@ func (m *Manager) GetTorrent(ctx context.Context, infoHash string) (TorrentSumma
     return summary, nil
 }
 
+// ForceUpload forces a torrent to be uploaded to Telegram, bypassing the watcher.
+func (m *Manager) ForceUpload(infoHash string) error {
+    m.mu.Lock()
+    t, ok := m.torrents[infoHash]
+    m.mu.Unlock()
+    
+    if !ok {
+        return fmt.Errorf("torrent not found: %s", infoHash)
+    }
+    
+    if m.tgClient == nil {
+        return fmt.Errorf("Telegram client not initialized")
+    }
+    
+    // Trigger upload by starting the watcher for this torrent
+    go m.awaitCompletionAndUpload(m.baseCtx, t, infoHash)
+    
+    return nil
+}
+
 // SetTelegramClient dynamically updates the Telegram client used for uploads.
 func (m *Manager) SetTelegramClient(client *telegram.Client) {
     m.mu.Lock()

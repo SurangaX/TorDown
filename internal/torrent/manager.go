@@ -317,33 +317,33 @@ func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torr
     completed, total := selectedOrAllBytes(t)
     if total > 0 && completed >= total {
         fmt.Fprintf(os.Stderr, "[Telegram] COMPLETED: %s already finished, TRIGGERING UPLOAD\n", infoHash)
-        goto upload
-    }
+    } else {
+        ticker := time.NewTicker(10 * time.Second)
+        defer ticker.Stop()
 
-    ticker := time.NewTicker(10 * time.Second)
-    defer ticker.Stop()
-
-    for {
-        select {
-        case <-m.baseCtx.Done():
-            fmt.Fprintf(os.Stderr, "[Telegram] INFO: %s context done, EXITING\n", infoHash)
-            return
-        case <-ticker.C:
-            completed, total := selectedOrAllBytes(t)
-            if total > 0 {
-                percent := float64(completed) / float64(total) * 100
-                fmt.Fprintf(os.Stderr, "[Telegram] STATUS: %s progress: %.2f%% (%d/%d)\n", infoHash, percent, completed, total)
-                if completed >= total {
-                    fmt.Fprintf(os.Stderr, "[Telegram] COMPLETED: %s! TRIGGERING UPLOAD\n", infoHash)
-                    goto upload
+        for {
+            select {
+            case <-m.baseCtx.Done():
+                fmt.Fprintf(os.Stderr, "[Telegram] INFO: %s context done, EXITING\n", infoHash)
+                return
+            case <-ticker.C:
+                completed, total := selectedOrAllBytes(t)
+                if total > 0 {
+                    percent := float64(completed) / float64(total) * 100
+                    fmt.Fprintf(os.Stderr, "[Telegram] STATUS: %s progress: %.2f%% (%d/%d)\n", infoHash, percent, completed, total)
+                    if completed >= total {
+                        fmt.Fprintf(os.Stderr, "[Telegram] COMPLETED: %s! TRIGGERING UPLOAD\n", infoHash)
+                        break
+                    }
+                } else {
+                    fmt.Fprintf(os.Stderr, "[Telegram] WAIT: %s waiting for sizes...\n", infoHash)
                 }
-            } else {
-                fmt.Fprintf(os.Stderr, "[Telegram] WAIT: %s waiting for sizes...\n", infoHash)
             }
         }
     }
 
-upload:
+    // Upload phase
+    
     info := t.Info()
     if info == nil {
         fmt.Fprintf(os.Stderr, "[Telegram] ERR: %s metadata lost during upload start\n", infoHash)

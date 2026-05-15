@@ -43,15 +43,18 @@ class TelegramUploader:
         self.phone = phone
         self.session_dir = session_dir or SESSION_DIR
         self.session_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.client = Client(
-            name=SESSION_NAME,
-            api_id=api_id,
-            api_hash=api_hash,
-            phone_number=phone,
-            workdir=str(self.session_dir),
-            in_memory=False
-        )
+
+        client_kwargs = {
+            "name": SESSION_NAME,
+            "api_id": api_id,
+            "api_hash": api_hash,
+            "workdir": str(self.session_dir),
+            "in_memory": False,
+        }
+        if phone:
+            client_kwargs["phone_number"] = phone
+
+        self.client = Client(**client_kwargs)
     
     async def ensure_authenticated(self) -> bool:
         """Ensure client is authenticated and connected."""
@@ -222,10 +225,10 @@ async def main():
         file_path = request.get("file_path", "")
         session_dir = request.get("session_dir")
         
-        if not all([api_id, api_hash, phone, file_path]):
+        if not all([api_id, api_hash, file_path]):
             result = {
                 "success": False,
-                "error": "Missing required fields: api_id, api_hash, phone, file_path"
+                "error": "Missing required fields: api_id, api_hash, file_path"
             }
             print(json.dumps(result))
             return

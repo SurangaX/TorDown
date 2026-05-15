@@ -314,13 +314,16 @@ func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torr
     }
     m.persistMu.Unlock()
 
+    readyToUpload := false
     completed, total := selectedOrAllBytes(t)
     if total > 0 && completed >= total {
         fmt.Fprintf(os.Stderr, "[Telegram] COMPLETED: %s already finished, TRIGGERING UPLOAD\n", infoHash)
+        readyToUpload = true
     } else {
         ticker := time.NewTicker(10 * time.Second)
         defer ticker.Stop()
 
+    waitLoop:
         for {
             select {
             case <-m.baseCtx.Done():
@@ -333,13 +336,18 @@ func (m *Manager) awaitCompletionAndUpload(ctx context.Context, t *atorrent.Torr
                     fmt.Fprintf(os.Stderr, "[Telegram] STATUS: %s progress: %.2f%% (%d/%d)\n", infoHash, percent, completed, total)
                     if completed >= total {
                         fmt.Fprintf(os.Stderr, "[Telegram] COMPLETED: %s! TRIGGERING UPLOAD\n", infoHash)
-                        break
+                        readyToUpload = true
+                        break waitLoop
                     }
                 } else {
                     fmt.Fprintf(os.Stderr, "[Telegram] WAIT: %s waiting for sizes...\n", infoHash)
                 }
             }
         }
+    }
+
+    if !readyToUpload {
+        return
     }
 
     // Upload phase
